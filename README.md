@@ -1,6 +1,6 @@
 Aquí tienes el archivo `README.md` actualizado, incluyendo las cuatro imágenes pedagógicas generadas en las secciones correspondientes para mejorar la comprensión del proyecto.
 
------
+------
 
 # 🔗 Supply Chain Tracker - Proyecto de Desarrollo Blockchain
 
