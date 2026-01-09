@@ -7,6 +7,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Hardhat artifacts
+artifacts/
+cache/
+typechain-types/
+dist/
+
 # Environment variables
 .env
 .env.local
@@ -18,6 +24,22 @@ yarn-error.log*
 *.pem
 *.key
 *_key
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vite
+.vite/
+dist/
+build/
 *_secret
 seed.txt
 mnemonic.txt
