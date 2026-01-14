@@ -39,6 +39,15 @@ body {
 .header-info {
   font-size: 12px;
   opacity: 0.9;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  align-items: center;
+}
+
+.header-info button {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .nav-tabs {

@@ -1,40 +1,125 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserProvider, Contract } from 'ethers';
+import { BrowserProvider, Contract, getAddress } from 'ethers';
 import Login from './components/Login';
 import AdminPanel from './components/AdminPanel';
 import UserProfile from './components/UserProfile';
 import AssetManager from './components/AssetManager';
 import CertificateManager from './components/CertificateManager';
 import Dashboard from './components/Dashboard';
-import { ABI } from './config/abi';
+import { CONTRACT_ABI } from './config/abi';
 import './App.css';
 
-const CONTRACT_ADDRESS = '0x5FbDB2315678afccb333f8a9c12e1f0d7a8f7cbc'; // Actualiza con tu dirección
+const DEFAULT_CONTRACT_ADDRESS = '0x5fbdb2315678afccb333f8a9c12e1f0d7a8f7cbc';
 
 export default function App() {
   const [account, setAccount] = useState(null);
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [contract, setContract] = useState(null);
-  const [networkOk, setNetworkOk] = useState(false);
+  const [contractAddress, setContractAddress] = useState(DEFAULT_CONTRACT_ADDRESS);
+  const [blockchainConnected, setBlockchainConnected] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [workEnvironment, setWorkEnvironment] = useState('offline');
+  const [blockchainStatus, setBlockchainStatus] = useState('Offline');
 
-  // Verificar sesión existente
+  // Verificar sesión existente y cargar configuración
   useEffect(() => {
-    const savedUser = localStorage.getItem('currentUser');
-    const savedWallet = localStorage.getItem('walletAddress');
-    
-    if (savedUser && savedWallet) {
-      setCurrentUser(JSON.parse(savedUser));
-      initializeWeb3();
-    } else {
+    // Cargar entorno de trabajo
+    const savedEnvironment = localStorage.getItem('workEnvironment') || 'offline';
+    setWorkEnvironment(savedEnvironment);
+    updateBlockchainStatus(savedEnvironment);
+
+    // Cargar dirección del contrato desde localStorage
+    try {
+      let savedContractAddress = localStorage.getItem('contractAddress') || DEFAULT_CONTRACT_ADDRESS;
+      
+      // Intentar normalizar con checksum, si falla usar tal como está
+      try {
+        savedContractAddress = getAddress(savedContractAddress);
+      } catch (checksumErr) {
+        // Si hay error de checksum, convertir a minúsculas (dirección válida pero sin checksum correcto)
+        if (ethers.isAddress(savedContractAddress)) {
+          savedContractAddress = savedContractAddress.toLowerCase();
+        } else {
+          throw new Error('Dirección de contrato inválida');
+        }
+      }
+      
+      setContractAddress(savedContractAddress);
+      
+      const savedUser = localStorage.getItem('currentUser');
+      
+      if (savedUser) {
+        const user = JSON.parse(savedUser);
+        setCurrentUser(user);
+        
+        // Todos los usuarios ven el dashboard al loguearse
+        setActiveTab('dashboard');
+        
+        // Intentar conectar a blockchain si el usuario usó MetaMask
+        if (user.isMetaMaskUser) {
+          initializeWeb3(savedContractAddress);
+        } else {
+          setIsLoading(false);
+        }
+      } else {
+        setIsLoading(false);
+      }
+    } catch (err) {
+      console.error('Error cargando configuración:', err.message);
+      setContractAddress(DEFAULT_CONTRACT_ADDRESS.toLowerCase());
       setIsLoading(false);
     }
   }, []);
 
-  const initializeWeb3 = async () => {
+  // Escuchar cambios en la configuración del contrato
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'contractAddress' && e.newValue) {
+        try {
+          let address = e.newValue;
+          
+          // Intentar normalizar, si falla usar minúsculas
+          try {
+            address = getAddress(address);
+          } catch (checksumErr) {
+            if (ethers.isAddress(address)) {
+              address = address.toLowerCase();
+            } else {
+              throw new Error('Dirección inválida');
+            }
+          }
+          
+          console.log('Configuración de contrato actualizada:', address);
+          setContractAddress(address);
+          // Reinicializar contrato si hay signer
+          if (signer) {
+            initializeWeb3(address);
+          }
+        } catch (err) {
+          console.error('Error procesando dirección del contrato:', err.message);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [signer]);
+
+  const updateBlockchainStatus = (environment) => {
+    const statusMap = {
+      'offline': '❌ Offline',
+      'hardhat': '✅ Hardhat Local',
+      'sepolia': '🔵 Sepolia Testnet',
+      'mainnet': '💜 Ethereum Mainnet',
+      'custom': '🔧 Red Privada',
+    };
+    setBlockchainStatus(statusMap[environment] || 'Desconocido');
+  };
+
+  const initializeWeb3 = async (contractAddr = contractAddress) => {
     if (window.ethereum) {
       try {
         const provider = new BrowserProvider(window.ethereum);
@@ -46,25 +131,36 @@ export default function App() {
         const signer = await provider.getSigner();
         setSigner(signer);
 
-        // Inicializar contrato
-        const contractInstance = new Contract(CONTRACT_ADDRESS, ABI, signer);
-        setContract(contractInstance);
-
-        const network = await provider.getNetwork();
-        console.log('Connected to network:', network);
-        setNetworkOk(true);
+        // Inicializar contrato con la dirección configurada
+        try {
+          const contractInstance = new Contract(contractAddr, CONTRACT_ABI, signer);
+          setContract(contractInstance);
+          setBlockchainConnected(true);
+          console.log('✅ Blockchain conectado con contrato:', contractAddr);
+        } catch (err) {
+          console.warn('⚠️ Contrato no disponible:', err.message);
+          setBlockchainConnected(false);
+        }
       } catch (err) {
-        console.error('Web3 initialization failed:', err);
+        console.warn('⚠️ Web3 no disponible, continuando sin blockchain:', err.message);
+        setBlockchainConnected(false);
       }
     } else {
-      alert('MetaMask no detectado. Instálalo para continuar.');
+      console.warn('⚠️ MetaMask no disponible');
+      setBlockchainConnected(false);
     }
     setIsLoading(false);
   };
 
   const handleLoginSuccess = (userData) => {
     setCurrentUser(userData);
-    initializeWeb3();
+    
+    // Intentar conectar si usó MetaMask
+    if (userData.isMetaMaskUser) {
+      initializeWeb3();
+    } else {
+      setIsLoading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -73,7 +169,7 @@ export default function App() {
     setProvider(null);
     setSigner(null);
     setContract(null);
-    setNetworkOk(false);
+    setBlockchainConnected(false);
     setActiveTab('profile');
   };
 
@@ -82,28 +178,27 @@ export default function App() {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // Pantalla de carga Web3
-  if (!networkOk || !account) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
-        <h1>🔗 TFM3 - Trazabilidad Industrial</h1>
-        <p>Conectando a MetaMask...</p>
-        <button onClick={initializeWeb3}>Conectar MetaMask</button>
-      </div>
-    );
-  }
-
-  // Verificar si es administrador (basado en acceso al contrato o localStorage)
+  // Verificar si es administrador
   const isAdmin = currentUser?.role === 'ADMIN' || account === currentUser?.walletAddress;
 
   return (
     <div className="app">
+
       <header className="header">
         <h1>📦 Trazabilidad Industrial con Blockchain</h1>
         <div className="header-info">
           <p>Usuario: <strong>{currentUser?.username}</strong></p>
           <p>Rol: <span className={`badge role-${currentUser?.role?.toLowerCase()}`}>{currentUser?.role}</span></p>
-          <p>Wallet: {account?.slice(0, 10)}...{account?.slice(-8)}</p>
+          <p>Wallet: {currentUser?.walletAddress?.slice(0, 10)}...{currentUser?.walletAddress?.slice(-8)}</p>
+          <p style={{ 
+            color: workEnvironment === 'offline' ? '#ef4444' : '#10b981',
+            fontWeight: 'bold'
+          }}>
+            {blockchainStatus}
+          </p>
+          <button onClick={handleLogout} className="btn-danger" title="Cerrar sesión">
+            🚪 Logout
+          </button>
         </div>
       </header>
 
@@ -153,9 +248,9 @@ export default function App() {
         {activeTab === 'admin' && isAdmin && (
           <AdminPanel contract={contract} provider={provider} currentUser={currentUser} />
         )}
-        {activeTab === 'dashboard' && <Dashboard provider={provider} signer={signer} contractAddress={CONTRACT_ADDRESS} />}
-        {activeTab === 'assets' && <AssetManager signer={signer} contractAddress={CONTRACT_ADDRESS} />}
-        {activeTab === 'certificates' && <CertificateManager signer={signer} contractAddress={CONTRACT_ADDRESS} />}
+        {activeTab === 'dashboard' && <Dashboard provider={provider} signer={signer} contractAddress={contractAddress} blockchainStatus={blockchainStatus} workEnvironment={workEnvironment} />}
+        {activeTab === 'assets' && <AssetManager signer={signer} contractAddress={contractAddress} />}
+        {activeTab === 'certificates' && <CertificateManager signer={signer} contractAddress={contractAddress} />}
       </main>
 
       <footer className="footer">
