@@ -188,6 +188,18 @@ export default function AssetManager({ signer, contractAddress }) {
     setTimeout(() => setMessage(''), 2000);
   };
 
+  // Reactivar activo en modo offline
+  const reactivateAssetOffline = (id) => {
+    const updatedAssets = assets.map(a => 
+      a.id === id ? { ...a, active: true, updatedAt: new Date().toISOString() } : a
+    );
+    saveAssets(updatedAssets);
+    const asset = updatedAssets.find(a => a.id === id);
+    addToHistory('REACTIVADO', asset);
+    setMessage('✅ Activo reactivado');
+    setTimeout(() => setMessage(''), 2000);
+  };
+
   // Editar activo
   const startEdit = (asset) => {
     setEditingId(asset.id);
@@ -561,7 +573,7 @@ export default function AssetManager({ signer, contractAddress }) {
                                 >
                                   ✏️
                                 </button>
-                                {a.active && (
+                                {a.active ? (
                                   <button 
                                     onClick={() => deactivateAssetOffline(a.id)}
                                     style={{
@@ -574,8 +586,26 @@ export default function AssetManager({ signer, contractAddress }) {
                                       borderRadius: '3px',
                                       cursor: 'pointer'
                                     }}
+                                    title="Desactivar activo"
                                   >
                                     🛑
+                                  </button>
+                                ) : (
+                                  <button 
+                                    onClick={() => reactivateAssetOffline(a.id)}
+                                    style={{
+                                      padding: '4px 6px',
+                                      marginRight: '3px',
+                                      fontSize: '11px',
+                                      backgroundColor: '#10b981',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      cursor: 'pointer'
+                                    }}
+                                    title="Reactivar activo"
+                                  >
+                                    ♻️
                                   </button>
                                 )}
                                 <button
