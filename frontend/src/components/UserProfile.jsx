@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export function UserProfile({ currentUser, contract, onLogout }) {
+export default function UserProfile({ currentUser, contract, onLogout }) {
   const [userDetails, setUserDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -157,5 +157,3 @@ export function UserProfile({ currentUser, contract, onLogout }) {
     </div>
   );
 }
-
-export default UserProfile;

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ethers } from 'ethers';
 
-export function Login({ onLoginSuccess }) {
+export default function Login({ onLoginSuccess }) {
   const [step, setStep] = useState('initial'); // initial, connecting, profile
   const [walletAddress, setWalletAddress] = useState('');
   const [username, setUsername] = useState('');
@@ -156,5 +156,3 @@ export function Login({ onLoginSuccess }) {
     </div>
   );
 }
-
-export default Login;

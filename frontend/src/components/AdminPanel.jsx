@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 
-export function AdminPanel({ contract, provider, currentUser }) {
+export default function AdminPanel({ contract, provider, currentUser }) {
   const [users, setUsers] = useState([]);
   const [newUser, setNewUser] = useState({ wallet: '', username: '', role: 'AUDITOR' });
   const [loading, setLoading] = useState(false);
@@ -289,5 +289,3 @@ export function AdminPanel({ contract, provider, currentUser }) {
     </div>
   );
 }
-
-export default AdminPanel;
