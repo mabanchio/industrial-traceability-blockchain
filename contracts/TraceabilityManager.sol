@@ -8,6 +8,14 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
     bytes32 public constant CERTIFIER_ROLE = keccak256("CERTIFIER_ROLE");
     bytes32 public constant ASSET_CREATOR_ROLE = keccak256("ASSET_CREATOR_ROLE");
 
+    struct User {
+        address walletAddress;
+        string username;
+        string role;
+        bool active;
+        uint256 registeredAt;
+    }
+
     struct Asset {
         uint256 assetId;
         address owner;
@@ -33,12 +41,17 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
     mapping(uint256 => Certificate) private certificates;
     mapping(uint256 => uint256[]) private assetCertificates;
     mapping(address => uint256[]) private userAssets;
+    mapping(address => User) private users;
+    mapping(string => address[]) private roleUsers;
 
     event AssetRegistered(uint256 indexed assetId, address indexed owner, string assetType);
     event AssetDeactivated(uint256 indexed assetId);
     event CertificateIssued(uint256 indexed certId, uint256 indexed assetId, address indexed issuer, uint256 expiresAt);
     event CertificateRenewed(uint256 indexed certId, uint256 indexed assetId, uint256 newExpiration);
     event CertificateRevoked(uint256 indexed certId);
+    event UserRegistered(address indexed walletAddress, string username, string role);
+    event RoleAssigned(address indexed walletAddress, string role);
+    event RoleRevoked(address indexed walletAddress, string role);
 
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -48,7 +61,110 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
         certCounter = 1;
     }
 
-    function registerAsset(
+    // ═══════════════════════════════════════════════════════════════
+    // USER MANAGEMENT FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════
+
+    function registerUser(
+        address walletAddress,
+        string calldata username,
+        string calldata role
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(walletAddress != address(0), "Invalid wallet");
+        require(bytes(username).length > 0, "Invalid username");
+        require(!users[walletAddress].active, "User already registered");
+        require(
+            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("CERTIFIER")) ||
+            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("ASSET_CREATOR")) ||
+            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("AUDITOR")) ||
+            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("MANUFACTURER")) ||
+            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("DISTRIBUTOR")),
+            "Invalid role"
+        );
+
+        users[walletAddress] = User({
+            walletAddress: walletAddress,
+            username: username,
+            role: role,
+            active: true,
+            registeredAt: block.timestamp
+        });
+
+        roleUsers[role].push(walletAddress);
+
+        // Assign roles based on the role string
+        if (keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("CERTIFIER"))) {
+            grantRole(CERTIFIER_ROLE, walletAddress);
+        } else if (keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("ASSET_CREATOR"))) {
+            grantRole(ASSET_CREATOR_ROLE, walletAddress);
+        }
+
+        emit UserRegistered(walletAddress, username, role);
+    }
+
+    function assignRole(address walletAddress, string calldata newRole)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(users[walletAddress].active, "User not found");
+        require(bytes(newRole).length > 0, "Invalid role");
+
+        string memory oldRole = users[walletAddress].role;
+        users[walletAddress].role = newRole;
+
+        // Update smart contract roles
+        if (keccak256(abi.encodePacked(oldRole)) == keccak256(abi.encodePacked("CERTIFIER"))) {
+            revokeRole(CERTIFIER_ROLE, walletAddress);
+        } else if (keccak256(abi.encodePacked(oldRole)) == keccak256(abi.encodePacked("ASSET_CREATOR"))) {
+            revokeRole(ASSET_CREATOR_ROLE, walletAddress);
+        }
+
+        if (keccak256(abi.encodePacked(newRole)) == keccak256(abi.encodePacked("CERTIFIER"))) {
+            grantRole(CERTIFIER_ROLE, walletAddress);
+        } else if (keccak256(abi.encodePacked(newRole)) == keccak256(abi.encodePacked("ASSET_CREATOR"))) {
+            grantRole(ASSET_CREATOR_ROLE, walletAddress);
+        }
+
+        emit RoleAssigned(walletAddress, newRole);
+    }
+
+    function deactivateUser(address walletAddress)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(users[walletAddress].active, "User not found");
+
+        User storage user = users[walletAddress];
+        user.active = false;
+
+        // Revoke smart contract roles
+        if (hasRole(CERTIFIER_ROLE, walletAddress)) {
+            revokeRole(CERTIFIER_ROLE, walletAddress);
+        }
+        if (hasRole(ASSET_CREATOR_ROLE, walletAddress)) {
+            revokeRole(ASSET_CREATOR_ROLE, walletAddress);
+        }
+
+        emit RoleRevoked(walletAddress, user.role);
+    }
+
+    function getUser(address walletAddress) external view returns (User memory) {
+        require(users[walletAddress].active, "User not found");
+        return users[walletAddress];
+    }
+
+    function getUsersByRole(string calldata role) external view returns (address[] memory) {
+        return roleUsers[role];
+    }
+
+    function isUserActive(address walletAddress) external view returns (bool) {
+        return users[walletAddress].active;
+    }
+
+    function getUserRole(address walletAddress) external view returns (string memory) {
+        require(users[walletAddress].active, "User not found");
+        return users[walletAddress].role;
+    }    function registerAsset(
         string calldata assetType,
         string calldata description
     ) external onlyRole(ASSET_CREATOR_ROLE) returns (uint256) {
