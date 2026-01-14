@@ -407,7 +407,7 @@ TFM3/
 
 ## 📄 Licencia
 
-MIT License - Máster en Blockchain, 2025
+MIT License - Máster en Blockchain, 2026
 
 ---
 
@@ -415,4 +415,4 @@ MIT License - Máster en Blockchain, 2025
 
 **Matías Banchio**  
 TFM3: Trazabilidad Industrial y Certificaciones con Blockchain  
-Máster en Blockchain - 2025
+Máster en Blockchain - 2026

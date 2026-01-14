@@ -179,7 +179,7 @@ echo -e "${BLUE}═════════════════════�
 echo "   Fecha:    9 de enero de 2026"
 echo "   Versión: 1.0.0"
 echo "   Autor:   Matías Banchio"
-echo "   Máster:  Blockchain - 2025"
+echo "   Máster:  Blockchain - 2026"
 echo ""
 echo "   📖 Para más información, consulta README-TFM3.md"
 echo ""

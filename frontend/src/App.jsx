@@ -254,7 +254,7 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        <p>TFM3 - Máster en Blockchain · 2025</p>
+        <p>TFM3 - Máster en Blockchain · 2026</p>
       </footer>
     </div>
   );
