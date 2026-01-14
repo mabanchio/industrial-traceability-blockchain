@@ -5,7 +5,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    strictPort: false,
-    open: false
+    strictPort: true,
+    host: '127.0.0.1',
+    open: false,
+    hmr: {
+      protocol: 'http',
+      host: 'localhost',
+      port: 3000
+    }
   }
 })

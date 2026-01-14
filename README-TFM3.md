@@ -15,7 +15,7 @@ Plataforma descentralizada para gestionar trazabilidad industrial con certificac
 ✅ Frontend funcional con React + Vite + ethers.js  
 ✅ Integración MetaMask para interacción con blockchain  
 ✅ Optimizaciones de gas medibles  
-✅ Documentación técnica completa  
+✅ Documentación técnica completa
 
 ---
 
