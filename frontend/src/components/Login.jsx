@@ -391,27 +391,34 @@ export default function Login({ onLoginSuccess }) {
           const { CONTRACT_ABI } = await import('../config/abi.js');
           const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
           
-          // Registrar el usuario en blockchain con la wallet vinculada
+          // Vincular wallet a usuario usando linkWalletToUser (sin necesidad de ser admin)
           try {
             const blockchainRole = userRole === 'ADMIN' ? 'ASSET_CREATOR' : userRole;
-            const tx = await contract.registerUser(
-              walletAddress,
+            console.log('📝 Ejecutando linkWalletToUser con:');
+            console.log('  - Username:', user);
+            console.log('  - Role:', blockchainRole);
+            console.log('  - Wallet del usuario (msg.sender):', await signer.getAddress());
+            
+            const tx = await contract.linkWalletToUser(
               user,
               blockchainRole
             );
-            await tx.wait();
-            console.log('✅ Usuario registrado en blockchain con wallet:', walletAddress);
+            
+            console.log('⏳ Esperando confirmación de transacción...');
+            const receipt = await tx.wait();
+            console.log('✅ Wallet vinculada a usuario en blockchain');
+            console.log('   - TX Hash:', receipt.hash);
+            console.log('   - Gas usado:', receipt.gasUsed.toString());
           } catch (error) {
             // Ignorar errores de usuario ya existente
-
-            if (error.message.includes('User already registered') || error.message.includes('already')) {
-              console.log('ℹ️ Usuario ya existe en blockchain');
+            if (error.message.includes('Wallet already linked') || error.message.includes('already')) {
+              console.log('ℹ️ Wallet ya está vinculada al usuario en blockchain');
             } else {
-              console.warn('⚠️ Error registrando en blockchain:', error.message);
+              console.warn('⚠️ Error vinculando wallet en blockchain:', error.message);
             }
           }
         } catch (error) {
-          console.warn('⚠️ No se pudo registrar en blockchain:', error.message);
+          console.warn('⚠️ No se pudo vincular wallet en blockchain:', error.message);
         }
       }
       

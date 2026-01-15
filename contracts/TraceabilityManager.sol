@@ -50,6 +50,7 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
     event CertificateRenewed(uint256 indexed certId, uint256 indexed assetId, uint256 newExpiration);
     event CertificateRevoked(uint256 indexed certId);
     event UserRegistered(address indexed walletAddress, string username, string role);
+    event UserWalletLinked(address indexed walletAddress, string username, string role);
     event RoleAssigned(address indexed walletAddress, string role);
     event RoleRevoked(address indexed walletAddress, string role);
 
@@ -100,6 +101,43 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
         }
 
         emit UserRegistered(walletAddress, username, role);
+    }
+
+    // Permite a usuarios vincularse a sí mismos con una wallet
+    function linkWalletToUser(
+        string calldata username,
+        string calldata role
+    ) external {
+        require(msg.sender != address(0), "Invalid wallet");
+        require(bytes(username).length > 0, "Invalid username");
+        require(!users[msg.sender].active, "Wallet already linked");
+        require(
+            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("CERTIFIER")) ||
+            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("ASSET_CREATOR")) ||
+            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("AUDITOR")) ||
+            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("MANUFACTURER")) ||
+            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("DISTRIBUTOR")),
+            "Invalid role"
+        );
+
+        users[msg.sender] = User({
+            walletAddress: msg.sender,
+            username: username,
+            role: role,
+            active: true,
+            registeredAt: block.timestamp
+        });
+
+        roleUsers[role].push(msg.sender);
+
+        // Assign roles based on the role string using _grantRole (no permission required)
+        if (keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("CERTIFIER"))) {
+            _grantRole(CERTIFIER_ROLE, msg.sender);
+        } else if (keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("ASSET_CREATOR"))) {
+            _grantRole(ASSET_CREATOR_ROLE, msg.sender);
+        }
+
+        emit UserWalletLinked(msg.sender, username, role);
     }
 
     function assignRole(address walletAddress, string calldata newRole)
