@@ -51,6 +51,55 @@ export default function Login({ onLoginSuccess }) {
     }
   };
 
+  // Verificar usuario en blockchain
+  const checkUserInBlockchain = async (username) => {
+    try {
+      const workEnvironment = localStorage.getItem('workEnvironment');
+      const contractAddress = localStorage.getItem('contractAddress');
+      
+      // Si es offline, no verificar en blockchain
+      if (workEnvironment === 'offline' || !contractAddress || !window.ethereum) {
+        console.log('Modo offline o sin blockchain');
+        return null;
+      }
+      
+      console.log('Verificando usuario en blockchain...');
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const { CONTRACT_ABI } = await import('../config/abi.js');
+      
+      // Obtener cuentas de MetaMask
+      const accounts = await window.ethereum.request({
+        method: 'eth_accounts',
+      });
+      
+      if (!accounts || accounts.length === 0) {
+        console.log('Sin cuentas conectadas');
+        return null;
+      }
+      
+      const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
+      
+      // Intentar obtener datos del usuario de blockchain para cada cuenta
+      for (const account of accounts) {
+        try {
+          const user = await contract.getUser(account);
+          if (user && user.active) {
+            console.log('✅ Usuario encontrado en blockchain:', user);
+            return user;
+          }
+        } catch (e) {
+          // Usuario no existe en esta wallet
+        }
+      }
+      
+      console.log('Usuario no encontrado en blockchain');
+      return null;
+    } catch (error) {
+      console.warn('Error verificando en blockchain:', error.message);
+      return null;
+    }
+  };
+
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
       setError('Completa usuario y contraseña');
@@ -78,6 +127,66 @@ export default function Login({ onLoginSuccess }) {
     console.log('Usuario desde systemUsers:', user);
     console.log('Usuario desde allUsers:', registeredUser);
     
+    const workEnvironment = localStorage.getItem('workEnvironment');
+    
+    // En blockchain: verificar si usuario existe con wallet vinculada
+    if (workEnvironment !== 'offline') {
+      console.log('Verificando en blockchain...');
+      const blockchainUser = await checkUserInBlockchain(username);
+      
+      if (blockchainUser) {
+        // Usuario existe en blockchain con wallet
+        console.log('✅ Usuario existe en blockchain con wallet');
+        const userData = {
+          username: username,
+          role: user.role,
+          active: true,
+          walletAddress: blockchainUser.walletAddress,
+          registeredAt: new Date().toISOString(),
+          isMetaMaskUser: true,
+        };
+        
+        localStorage.setItem('currentUser', JSON.stringify(userData));
+        localStorage.setItem('walletAddress', blockchainUser.walletAddress);
+        
+        onLoginSuccess(userData);
+        setLoading(false);
+        return;
+      } else {
+        // Usuario NO existe en blockchain, requiere wallet
+        console.log('Usuario no en blockchain, requiere seleccionar wallet');
+        setAuthenticatedUser({
+          loginUser: username,
+          displayName: user.username || username,
+          role: user.role,
+        });
+        setStep('wallet');
+        setLoading(false);
+        
+        // Conectar MetaMask automáticamente
+        try {
+          const accounts = await window.ethereum.request({
+            method: 'eth_requestAccounts',
+          });
+          
+          if (accounts && accounts.length > 0) {
+            setAvailableWallets(accounts);
+            setShowWalletSelector(accounts.length > 1);
+            if (accounts.length === 1) {
+              // Si solo hay una wallet, seleccionarla automáticamente
+              await handleSelectWalletLogin(accounts[0], username, user.role);
+            }
+          }
+        } catch (err) {
+          setError('No se pudo conectar MetaMask');
+          setLoading(false);
+        }
+        
+        return;
+      }
+    }
+    
+    // FLUJO OFFLINE (original)
     // Si el usuario no existe en allUsers, agregarlo (fue creado en systemUsers por AdminPanel pero falta en allUsers)
     if (!registeredUser) {
       console.log('Usuario no en allUsers, agregando...');
@@ -209,21 +318,25 @@ export default function Login({ onLoginSuccess }) {
     }
   };
 
-  const handleSelectWalletLogin = async (walletAddress) => {
+  const handleSelectWalletLogin = async (walletAddress, username = null, role = null) => {
     try {
       setLoading(true);
       setError('');
 
+      const user = username || authenticatedUser.loginUser;
+      const userRole = role || authenticatedUser.role;
+
       console.log('=== VINCULANDO WALLET EN LOGIN ===');
       console.log('walletAddress:', walletAddress);
-      console.log('loginUser:', authenticatedUser.loginUser);
+      console.log('username:', user);
+      console.log('role:', userRole);
 
       // Obtener datos actuales
       let allUsersStr = localStorage.getItem('allUsers') || '[]';
       let allUsers = JSON.parse(allUsersStr);
       
       // Buscar usuario por username
-      let userIndex = allUsers.findIndex(u => u.username === authenticatedUser.loginUser);
+      let userIndex = allUsers.findIndex(u => u.username === user);
       
       console.log('Usuario encontrado en índice:', userIndex);
       console.log('allUsers antes:', allUsers);
@@ -236,8 +349,8 @@ export default function Login({ onLoginSuccess }) {
       } else {
         // Crear nuevo usuario (caso: usuario registrado en systemUsers pero no en allUsers)
         const newUser = {
-          username: authenticatedUser.loginUser,
-          role: authenticatedUser.role,
+          username: user,
+          role: userRole,
           active: true,
           walletAddress: walletAddress,
           registeredAt: new Date().toISOString(),
@@ -253,8 +366,8 @@ export default function Login({ onLoginSuccess }) {
       
       // Crear userData para currentUser
       const userData = {
-        username: authenticatedUser.loginUser,
-        role: authenticatedUser.role,
+        username: user,
+        role: userRole,
         active: true,
         walletAddress: walletAddress,
         registeredAt: allUsers[userIndex >= 0 ? userIndex : allUsers.length - 1]?.registeredAt || new Date().toISOString(),
@@ -266,7 +379,7 @@ export default function Login({ onLoginSuccess }) {
 
       console.log('Datos guardados, userData:', userData);
       
-      // Intentar registrar en blockchain si estamos conectados
+      // Registrar en blockchain
       const workEnvironment = localStorage.getItem('workEnvironment');
       const contractAddress = localStorage.getItem('contractAddress');
       
@@ -278,17 +391,19 @@ export default function Login({ onLoginSuccess }) {
           const { CONTRACT_ABI } = await import('../config/abi.js');
           const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
           
-          // Intentar registrar el usuario
+          // Registrar el usuario en blockchain con la wallet vinculada
           try {
+            const blockchainRole = userRole === 'ADMIN' ? 'ASSET_CREATOR' : userRole;
             const tx = await contract.registerUser(
               walletAddress,
-              authenticatedUser.loginUser,
-              authenticatedUser.role === 'ADMIN' ? 'ASSET_CREATOR' : authenticatedUser.role
+              user,
+              blockchainRole
             );
             await tx.wait();
-            console.log('✅ Usuario registrado en blockchain');
+            console.log('✅ Usuario registrado en blockchain con wallet:', walletAddress);
           } catch (error) {
             // Ignorar errores de usuario ya existente
+
             if (error.message.includes('User already registered') || error.message.includes('already')) {
               console.log('ℹ️ Usuario ya existe en blockchain');
             } else {
