@@ -8,12 +8,24 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
     bytes32 public constant CERTIFIER_ROLE = keccak256("CERTIFIER_ROLE");
     bytes32 public constant ASSET_CREATOR_ROLE = keccak256("ASSET_CREATOR_ROLE");
 
-    struct User {
+    // ═══════════════════════════════════════════════════════════════
+    // STRUCTS FOR NEW WALLET MANAGEMENT
+    // ═══════════════════════════════════════════════════════════════
+
+    struct WalletInfo {
         address walletAddress;
+        bool active;  // true si es la wallet activa
+        uint256 linkedAt;
+        uint256 deactivatedAt;  // 0 si sigue activa
+    }
+
+    struct User {
         string username;
         string role;
-        bool active;
+        bool active;  // Usuario activo/inactivo en el sistema
         uint256 registeredAt;
+        address activeWallet;  // Referencia rápida a la wallet activa
+        address[] wallets;  // Array de todas las wallets del usuario
     }
 
     struct Asset {
@@ -34,6 +46,10 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
         string certType;
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // STATE VARIABLES
+    // ═══════════════════════════════════════════════════════════════
+
     uint256 private assetCounter;
     uint256 private certCounter;
 
@@ -41,20 +57,38 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
     mapping(uint256 => Certificate) private certificates;
     mapping(uint256 => uint256[]) private assetCertificates;
     mapping(address => uint256[]) private userAssets;
-    mapping(address => User) private users;
-    mapping(string => address[]) private roleUsers;
-    mapping(string => address) private usernameToWallet; // Mapeo username -> wallet para búsqueda rápida
 
+    // User data structure: username => User
+    mapping(string => User) private users;
+    
+    // Quick lookup: wallet address => username
+    mapping(address => string) private walletToUsername;
+    
+    // Wallet details: walletAddress => WalletInfo
+    mapping(address => WalletInfo) private walletInfo;
+    
+    mapping(string => address[]) private roleUsers;
+
+    // ═══════════════════════════════════════════════════════════════
+    // EVENTS
+    // ═══════════════════════════════════════════════════════════════
+
+    event UserRegistered(string indexed username, string role, uint256 timestamp);
+    event UserDeactivated(string indexed username, uint256 timestamp);
+    event UserActivated(string indexed username, uint256 timestamp);
+    
+    event WalletLinked(string indexed username, address indexed walletAddress, bool isActive, uint256 timestamp);
+    event WalletUnlinked(string indexed username, address indexed walletAddress, uint256 timestamp);
+    event WalletActivated(string indexed username, address indexed walletAddress, uint256 timestamp);
+    event WalletDeactivated(string indexed username, address indexed walletAddress, uint256 timestamp);
+    
     event AssetRegistered(uint256 indexed assetId, address indexed owner, string assetType);
     event AssetDeactivated(uint256 indexed assetId);
     event CertificateIssued(uint256 indexed certId, uint256 indexed assetId, address indexed issuer, uint256 expiresAt);
     event CertificateRenewed(uint256 indexed certId, uint256 indexed assetId, uint256 newExpiration);
     event CertificateRevoked(uint256 indexed certId);
-    event UserRegistered(address indexed walletAddress, string username, string role);
-    event UserWalletLinked(address indexed walletAddress, string username, string role);
-    event UserWalletUnlinked(address indexed walletAddress, string username);
-    event RoleAssigned(address indexed walletAddress, string role);
-    event RoleRevoked(address indexed walletAddress, string role);
+    event RoleAssigned(string indexed username, string role);
+    event RoleRevoked(string indexed username, string role);
 
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -65,186 +99,357 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // USER MANAGEMENT FUNCTIONS
+    // USER REGISTRATION FUNCTIONS
     // ═══════════════════════════════════════════════════════════════
 
+    /**
+     * Registra un nuevo usuario en el blockchain
+     * Solo el admin puede registrar usuarios
+     */
     function registerUser(
-        address walletAddress,
         string calldata username,
         string calldata role
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(walletAddress != address(0), "Invalid wallet");
         require(bytes(username).length > 0, "Invalid username");
-        require(!users[walletAddress].active, "User already registered");
-        require(
-            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("CERTIFIER")) ||
-            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("ASSET_CREATOR")) ||
-            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("AUDITOR")) ||
-            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("MANUFACTURER")) ||
-            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("DISTRIBUTOR")),
-            "Invalid role"
-        );
+        require(users[username].registeredAt == 0, "User already exists");
+        require(_isValidRole(role), "Invalid role");
 
-        users[walletAddress] = User({
-            walletAddress: walletAddress,
+        // Crear usuario sin wallet vinculada
+        users[username] = User({
             username: username,
             role: role,
             active: true,
-            registeredAt: block.timestamp
-        });
-
-        roleUsers[role].push(walletAddress);
-        usernameToWallet[username] = walletAddress; // Agregar mapeo username -> wallet
-
-        // Assign roles based on the role string
-        if (keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("CERTIFIER"))) {
-            grantRole(CERTIFIER_ROLE, walletAddress);
-        } else if (keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("ASSET_CREATOR"))) {
-            grantRole(ASSET_CREATOR_ROLE, walletAddress);
-        }
-
-        emit UserRegistered(walletAddress, username, role);
-    }
-
-    // Permite a usuarios vincularse a sí mismos con una wallet
-    function linkWalletToUser(
-        string calldata username,
-        string calldata role
-    ) external {
-        require(msg.sender != address(0), "Invalid wallet");
-        require(bytes(username).length > 0, "Invalid username");
-        require(!users[msg.sender].active, "Wallet already linked");
-        require(
-            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("CERTIFIER")) ||
-            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("ASSET_CREATOR")) ||
-            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("AUDITOR")) ||
-            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("MANUFACTURER")) ||
-            keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("DISTRIBUTOR")),
-            "Invalid role"
-        );
-
-        users[msg.sender] = User({
-            walletAddress: msg.sender,
-            username: username,
-            role: role,
-            active: true,
-            registeredAt: block.timestamp
+            registeredAt: block.timestamp,
+            activeWallet: address(0),
+            wallets: new address[](0)
         });
 
         roleUsers[role].push(msg.sender);
-        usernameToWallet[username] = msg.sender; // Agregar mapeo username -> wallet
-
-        // Assign roles based on the role string using _grantRole (no permission required)
-        if (keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("CERTIFIER"))) {
-            _grantRole(CERTIFIER_ROLE, msg.sender);
-        } else if (keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("ASSET_CREATOR"))) {
-            _grantRole(ASSET_CREATOR_ROLE, msg.sender);
-        }
-
-        emit UserWalletLinked(msg.sender, username, role);
+        emit UserRegistered(username, role, block.timestamp);
     }
 
-    // Permitir a usuario desvincularse de su wallet
-    function unlinkWallet(string calldata username) external {
+    /**
+     * Vincula una wallet a un usuario
+     * El usuario paga el gas de la transacción
+     * Si la wallet ya estaba vinculada, solo se activa
+     */
+    function linkWalletToUser(
+        string calldata username,
+        string calldata role
+    ) external nonReentrant {
+        require(bytes(username).length > 0, "Invalid username");
+        require(msg.sender != address(0), "Invalid wallet");
+        require(_isValidRole(role), "Invalid role");
+
+        User storage user = users[username];
+
+        // Si es primer registro, crear usuario
+        if (user.registeredAt == 0) {
+            user = users[username];
+            user.username = username;
+            user.role = role;
+            user.active = true;
+            user.registeredAt = block.timestamp;
+            user.activeWallet = address(0);
+            roleUsers[role].push(msg.sender);
+            emit UserRegistered(username, role, block.timestamp);
+        }
+
+        require(user.active, "User is inactive");
+
+        // Verificar si esta wallet ya estaba vinculada al usuario
+        bool walletExists = false;
+        for (uint256 i = 0; i < user.wallets.length; i++) {
+            if (user.wallets[i] == msg.sender) {
+                walletExists = true;
+                break;
+            }
+        }
+
+        if (walletExists) {
+            // La wallet ya existía
+            // Si ya es activa, no hay nada que hacer
+            if (walletInfo[msg.sender].active) {
+                revert("Wallet already active");
+            }
+            // Si no es activa, activarla
+            _activateWallet(username, msg.sender);
+        } else {
+            // Wallet nueva: agregarla
+            _addNewWallet(username, msg.sender, role);
+        }
+    }
+
+    /**
+     * Desactiva una wallet del usuario
+     * No la elimina, solo la marca como inactiva
+     * Si hay otras wallets, activa la siguiente
+     * El usuario paga el gas
+     */
+    function unlinkWallet(string calldata username) external nonReentrant {
         require(bytes(username).length > 0, "Invalid username");
         
-        address walletAddress = usernameToWallet[username];
-        require(walletAddress != address(0), "User not found");
-        require(walletAddress == msg.sender, "Can only unlink your own wallet");
-        
-        // Obtener datos del usuario antes de desvincular
-        User storage user = users[walletAddress];
-        require(user.active, "User not active");
-        
-        // Desvincular wallet manteniendo el usuario activo
-        // Reemplazamos la wallet con address(0) para representar desvinculación
-        delete usernameToWallet[username];
-        delete users[walletAddress];
-        
-        // Revocar roles
-        if (hasRole(CERTIFIER_ROLE, walletAddress)) {
-            _revokeRole(CERTIFIER_ROLE, walletAddress);
+        User storage user = users[username];
+        require(user.registeredAt != 0, "User not found");
+        require(user.active, "User is inactive");
+        require(user.activeWallet == msg.sender, "Wallet not active for this user");
+
+        _deactivateWallet(username, msg.sender);
+
+        // Activar la siguiente wallet si existe
+        for (uint256 i = 0; i < user.wallets.length; i++) {
+            if (user.wallets[i] != msg.sender && walletInfo[user.wallets[i]].linkedAt > 0) {
+                _activateWallet(username, user.wallets[i]);
+                break;
+            }
         }
-        if (hasRole(ASSET_CREATOR_ROLE, walletAddress)) {
-            _revokeRole(ASSET_CREATOR_ROLE, walletAddress);
-        }
-        
-        emit UserWalletUnlinked(walletAddress, username);
     }
 
-    function assignRole(address walletAddress, string calldata newRole)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
-        require(users[walletAddress].active, "User not found");
-        require(bytes(newRole).length > 0, "Invalid role");
+    /**
+     * Cambia el role de un usuario
+     */
+    function assignRole(
+        string calldata username,
+        string calldata newRole
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(bytes(username).length > 0, "Invalid username");
+        require(_isValidRole(newRole), "Invalid role");
 
-        string memory oldRole = users[walletAddress].role;
-        users[walletAddress].role = newRole;
+        User storage user = users[username];
+        require(user.registeredAt != 0, "User not found");
 
-        // Update smart contract roles
-        if (keccak256(abi.encodePacked(oldRole)) == keccak256(abi.encodePacked("CERTIFIER"))) {
-            revokeRole(CERTIFIER_ROLE, walletAddress);
-        } else if (keccak256(abi.encodePacked(oldRole)) == keccak256(abi.encodePacked("ASSET_CREATOR"))) {
-            revokeRole(ASSET_CREATOR_ROLE, walletAddress);
-        }
+        user.role = newRole;
 
-        if (keccak256(abi.encodePacked(newRole)) == keccak256(abi.encodePacked("CERTIFIER"))) {
-            grantRole(CERTIFIER_ROLE, walletAddress);
-        } else if (keccak256(abi.encodePacked(newRole)) == keccak256(abi.encodePacked("ASSET_CREATOR"))) {
-            grantRole(ASSET_CREATOR_ROLE, walletAddress);
-        }
-
-        emit RoleAssigned(walletAddress, newRole);
+        emit RoleAssigned(username, newRole);
     }
 
-    function deactivateUser(address walletAddress)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
+    /**
+     * Desactiva un usuario (mantiene sus datos pero lo bloquea)
+     */
+    function deactivateUser(string calldata username) 
+        external 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
     {
-        require(users[walletAddress].active, "User not found");
+        require(bytes(username).length > 0, "Invalid username");
+        
+        User storage user = users[username];
+        require(user.registeredAt != 0, "User not found");
+        require(user.active, "User already inactive");
 
-        User storage user = users[walletAddress];
         user.active = false;
 
-        // Revoke smart contract roles
-        if (hasRole(CERTIFIER_ROLE, walletAddress)) {
-            revokeRole(CERTIFIER_ROLE, walletAddress);
+        // Deactivar todas las wallets
+        for (uint256 i = 0; i < user.wallets.length; i++) {
+            if (walletInfo[user.wallets[i]].active) {
+                walletInfo[user.wallets[i]].active = false;
+                walletInfo[user.wallets[i]].deactivatedAt = block.timestamp;
+            }
         }
-        if (hasRole(ASSET_CREATOR_ROLE, walletAddress)) {
-            revokeRole(ASSET_CREATOR_ROLE, walletAddress);
-        }
+        user.activeWallet = address(0);
 
-        emit RoleRevoked(walletAddress, user.role);
+        emit UserDeactivated(username, block.timestamp);
     }
 
-    function getUser(address walletAddress) external view returns (User memory) {
-        require(users[walletAddress].active, "User not found");
-        return users[walletAddress];
+    /**
+     * Activa un usuario
+     */
+    function activateUser(string calldata username) 
+        external 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
+    {
+        require(bytes(username).length > 0, "Invalid username");
+        
+        User storage user = users[username];
+        require(user.registeredAt != 0, "User not found");
+        require(!user.active, "User already active");
+
+        user.active = true;
+        emit UserActivated(username, block.timestamp);
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // INTERNAL HELPER FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════
+
+    function _addNewWallet(
+        string calldata username,
+        address walletAddress,
+        string calldata role
+    ) internal {
+        User storage user = users[username];
+
+        // Desactivar wallet anterior si existe
+        if (user.activeWallet != address(0)) {
+            walletInfo[user.activeWallet].active = false;
+            walletInfo[user.activeWallet].deactivatedAt = block.timestamp;
+            emit WalletDeactivated(username, user.activeWallet, block.timestamp);
+        }
+
+        // Agregar nueva wallet
+        user.wallets.push(walletAddress);
+        walletInfo[walletAddress] = WalletInfo({
+            walletAddress: walletAddress,
+            active: true,
+            linkedAt: block.timestamp,
+            deactivatedAt: 0
+        });
+
+        user.activeWallet = walletAddress;
+        walletToUsername[walletAddress] = username;
+
+        // Asignar roles si es necesario
+        if (keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("CERTIFIER"))) {
+            _grantRole(CERTIFIER_ROLE, walletAddress);
+        } else if (keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("ASSET_CREATOR"))) {
+            _grantRole(ASSET_CREATOR_ROLE, walletAddress);
+        }
+
+        emit WalletLinked(username, walletAddress, true, block.timestamp);
+    }
+
+    function _activateWallet(string calldata username, address walletAddress) internal {
+        User storage user = users[username];
+        require(walletInfo[walletAddress].linkedAt > 0, "Wallet not previously linked");
+
+        // Desactivar wallet anterior si existe
+        if (user.activeWallet != address(0) && user.activeWallet != walletAddress) {
+            walletInfo[user.activeWallet].active = false;
+            walletInfo[user.activeWallet].deactivatedAt = block.timestamp;
+            emit WalletDeactivated(username, user.activeWallet, block.timestamp);
+        }
+
+        // Activar esta wallet
+        walletInfo[walletAddress].active = true;
+        walletInfo[walletAddress].deactivatedAt = 0;
+        user.activeWallet = walletAddress;
+
+        emit WalletActivated(username, walletAddress, block.timestamp);
+    }
+
+    function _deactivateWallet(string calldata username, address walletAddress) internal {
+        walletInfo[walletAddress].active = false;
+        walletInfo[walletAddress].deactivatedAt = block.timestamp;
+        emit WalletUnlinked(username, walletAddress, block.timestamp);
+    }
+
+    function _isValidRole(string calldata role) internal pure returns (bool) {
+        return keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("CERTIFIER")) ||
+               keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("ASSET_CREATOR")) ||
+               keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("AUDITOR")) ||
+               keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("MANUFACTURER")) ||
+               keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("DISTRIBUTOR"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GETTER FUNCTIONS - USER & WALLET INFO
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Obtiene la wallet activa de un usuario
+     */
+    function getActiveWallet(string calldata username) external view returns (address) {
+        User storage user = users[username];
+        require(user.registeredAt != 0, "User not found");
+        return user.activeWallet;
+    }
+
+    /**
+     * Obtiene todas las wallets de un usuario
+     */
+    function getAllWallets(string calldata username) external view returns (address[] memory) {
+        User storage user = users[username];
+        require(user.registeredAt != 0, "User not found");
+        return user.wallets;
+    }
+
+    /**
+     * Obtiene la información de una wallet específica
+     */
+    function getWalletInfo(address walletAddress) external view returns (WalletInfo memory) {
+        require(walletInfo[walletAddress].linkedAt > 0, "Wallet not found");
+        return walletInfo[walletAddress];
+    }
+
+    /**
+     * Obtiene información del usuario - RETORNA SOLO LA WALLET ACTIVA
+     */
+    function getUserByUsername(string calldata username) external view returns (
+        string memory _username,
+        string memory role,
+        bool _active,
+        uint256 registeredAt,
+        address activeWallet
+    ) {
+        User storage user = users[username];
+        require(user.registeredAt != 0, "User not found");
+        require(user.active, "User is inactive");
+
+        return (
+            user.username,
+            user.role,
+            user.active,
+            user.registeredAt,
+            user.activeWallet
+        );
+    }
+
+    /**
+     * Obtiene datos completos del usuario (admin only)
+     */
+    function getUserDetails(string calldata username) 
+        external 
+        view 
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        returns (User memory) 
+    {
+        User storage user = users[username];
+        require(user.registeredAt != 0, "User not found");
+        return user;
+    }
+
+    /**
+     * Verifica si un usuario existe
+     */
+    function userExists(string calldata username) external view returns (bool) {
+        return users[username].registeredAt != 0;
+    }
+
+    /**
+     * Verifica si un usuario está activo
+     */
+    function isUserActive(string calldata username) external view returns (bool) {
+        return users[username].active;
+    }
+
+    /**
+     * Obtiene el role de un usuario
+     */
+    function getUserRole(string calldata username) external view returns (string memory) {
+        User storage user = users[username];
+        require(user.registeredAt != 0, "User not found");
+        return user.role;
+    }
+
+    /**
+     * Obtiene el username asociado a una wallet
+     */
+    function getUsernameByWallet(address walletAddress) external view returns (string memory) {
+        string memory username = walletToUsername[walletAddress];
+        require(bytes(username).length > 0, "Wallet not associated with any user");
+        return username;
+    }
+
+    /**
+     * Obtiene usuarios por rol
+     */
     function getUsersByRole(string calldata role) external view returns (address[] memory) {
         return roleUsers[role];
     }
 
-    function isUserActive(address walletAddress) external view returns (bool) {
-        return users[walletAddress].active;
-    }
-
-    function getUserRole(address walletAddress) external view returns (string memory) {
-        require(users[walletAddress].active, "User not found");
-        return users[walletAddress].role;
-    }
-
-    function getWalletByUsername(string calldata username) external view returns (address) {
-        return usernameToWallet[username];
-    }
-
-    function getUserByUsername(string calldata username) external view returns (User memory) {
-        address wallet = usernameToWallet[username];
-        require(wallet != address(0), "User not found");
-        require(users[wallet].active, "User not active");
-        return users[wallet];
+    function getUser(address walletAddress) external view returns (User memory) {
+        string memory username = walletToUsername[walletAddress];
+        require(bytes(username).length > 0, "Wallet not found");
+        return users[username];
     }
 
     function registerAsset(

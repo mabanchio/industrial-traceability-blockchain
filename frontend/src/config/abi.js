@@ -1,3 +1,6 @@
+// Auto-generated ABI file - DO NOT EDIT MANUALLY
+// Generated on: 2026-01-15T15:32:59.199Z
+
 export const CONTRACT_ABI = [
   {
     "inputs": [],
@@ -167,9 +170,9 @@ export const CONTRACT_ABI = [
     "inputs": [
       {
         "indexed": true,
-        "internalType": "address",
-        "name": "walletAddress",
-        "type": "address"
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
       },
       {
         "indexed": false,
@@ -236,9 +239,9 @@ export const CONTRACT_ABI = [
     "inputs": [
       {
         "indexed": true,
-        "internalType": "address",
-        "name": "walletAddress",
-        "type": "address"
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
       },
       {
         "indexed": false,
@@ -255,12 +258,44 @@ export const CONTRACT_ABI = [
     "inputs": [
       {
         "indexed": true,
-        "internalType": "address",
-        "name": "walletAddress",
-        "type": "address"
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
       },
       {
         "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "UserActivated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "UserDeactivated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
         "internalType": "string",
         "name": "username",
         "type": "string"
@@ -270,6 +305,12 @@ export const CONTRACT_ABI = [
         "internalType": "string",
         "name": "role",
         "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
       }
     ],
     "name": "UserRegistered",
@@ -280,29 +321,10 @@ export const CONTRACT_ABI = [
     "inputs": [
       {
         "indexed": true,
-        "internalType": "address",
-        "name": "walletAddress",
-        "type": "address"
-      },
-      {
-        "indexed": false,
         "internalType": "string",
         "name": "username",
         "type": "string"
       },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "role",
-        "type": "string"
-      }
-    ],
-    "name": "UserWalletLinked",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
       {
         "indexed": true,
         "internalType": "address",
@@ -311,12 +333,93 @@ export const CONTRACT_ABI = [
       },
       {
         "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "WalletActivated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
         "internalType": "string",
         "name": "username",
         "type": "string"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "walletAddress",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
       }
     ],
-    "name": "UserWalletUnlinked",
+    "name": "WalletDeactivated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "walletAddress",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "isActive",
+        "type": "bool"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "WalletLinked",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "walletAddress",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "WalletUnlinked",
     "type": "event"
   },
   {
@@ -361,9 +464,22 @@ export const CONTRACT_ABI = [
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "walletAddress",
-        "type": "address"
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
+      }
+    ],
+    "name": "activateUser",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
       },
       {
         "internalType": "string",
@@ -392,14 +508,52 @@ export const CONTRACT_ABI = [
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "walletAddress",
-        "type": "address"
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
       }
     ],
     "name": "deactivateUser",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
+      }
+    ],
+    "name": "getActiveWallet",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
+      }
+    ],
+    "name": "getAllWallets",
+    "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -555,11 +709,6 @@ export const CONTRACT_ABI = [
       {
         "components": [
           {
-            "internalType": "address",
-            "name": "walletAddress",
-            "type": "address"
-          },
-          {
             "internalType": "string",
             "name": "username",
             "type": "string"
@@ -578,6 +727,16 @@ export const CONTRACT_ABI = [
             "internalType": "uint256",
             "name": "registeredAt",
             "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "activeWallet",
+            "type": "address"
+          },
+          {
+            "internalType": "address[]",
+            "name": "wallets",
+            "type": "address[]"
           }
         ],
         "internalType": "struct TraceabilityManager.User",
@@ -618,12 +777,46 @@ export const CONTRACT_ABI = [
     "name": "getUserByUsername",
     "outputs": [
       {
+        "internalType": "string",
+        "name": "_username",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "role",
+        "type": "string"
+      },
+      {
+        "internalType": "bool",
+        "name": "_active",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "registeredAt",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "activeWallet",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
+      }
+    ],
+    "name": "getUserDetails",
+    "outputs": [
+      {
         "components": [
-          {
-            "internalType": "address",
-            "name": "walletAddress",
-            "type": "address"
-          },
           {
             "internalType": "string",
             "name": "username",
@@ -643,6 +836,16 @@ export const CONTRACT_ABI = [
             "internalType": "uint256",
             "name": "registeredAt",
             "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "activeWallet",
+            "type": "address"
+          },
+          {
+            "internalType": "address[]",
+            "name": "wallets",
+            "type": "address[]"
           }
         ],
         "internalType": "struct TraceabilityManager.User",
@@ -656,12 +859,31 @@ export const CONTRACT_ABI = [
   {
     "inputs": [
       {
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
+      }
+    ],
+    "name": "getUserRole",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "walletAddress",
         "type": "address"
       }
     ],
-    "name": "getUserRole",
+    "name": "getUsernameByWallet",
     "outputs": [
       {
         "internalType": "string",
@@ -694,17 +916,39 @@ export const CONTRACT_ABI = [
   {
     "inputs": [
       {
-        "internalType": "string",
-        "name": "username",
-        "type": "string"
+        "internalType": "address",
+        "name": "walletAddress",
+        "type": "address"
       }
     ],
-    "name": "getWalletByUsername",
+    "name": "getWalletInfo",
     "outputs": [
       {
-        "internalType": "address",
+        "components": [
+          {
+            "internalType": "address",
+            "name": "walletAddress",
+            "type": "address"
+          },
+          {
+            "internalType": "bool",
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint256",
+            "name": "linkedAt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "deactivatedAt",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct TraceabilityManager.WalletInfo",
         "name": "",
-        "type": "address"
+        "type": "tuple"
       }
     ],
     "stateMutability": "view",
@@ -800,9 +1044,9 @@ export const CONTRACT_ABI = [
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "walletAddress",
-        "type": "address"
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
       }
     ],
     "name": "isUserActive",
@@ -889,11 +1133,6 @@ export const CONTRACT_ABI = [
   },
   {
     "inputs": [
-      {
-        "internalType": "address",
-        "name": "walletAddress",
-        "type": "address"
-      },
       {
         "internalType": "string",
         "name": "username",
@@ -1033,6 +1272,25 @@ export const CONTRACT_ABI = [
     "name": "unlinkWallet",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
+      }
+    ],
+    "name": "userExists",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   }
 ];
