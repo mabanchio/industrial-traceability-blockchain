@@ -43,6 +43,7 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
     mapping(address => uint256[]) private userAssets;
     mapping(address => User) private users;
     mapping(string => address[]) private roleUsers;
+    mapping(string => address) private usernameToWallet; // Mapeo username -> wallet para búsqueda rápida
 
     event AssetRegistered(uint256 indexed assetId, address indexed owner, string assetType);
     event AssetDeactivated(uint256 indexed assetId);
@@ -92,6 +93,7 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
         });
 
         roleUsers[role].push(walletAddress);
+        usernameToWallet[username] = walletAddress; // Agregar mapeo username -> wallet
 
         // Assign roles based on the role string
         if (keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("CERTIFIER"))) {
@@ -129,6 +131,7 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
         });
 
         roleUsers[role].push(msg.sender);
+        usernameToWallet[username] = msg.sender; // Agregar mapeo username -> wallet
 
         // Assign roles based on the role string using _grantRole (no permission required)
         if (keccak256(abi.encodePacked(role)) == keccak256(abi.encodePacked("CERTIFIER"))) {
@@ -202,7 +205,20 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
     function getUserRole(address walletAddress) external view returns (string memory) {
         require(users[walletAddress].active, "User not found");
         return users[walletAddress].role;
-    }    function registerAsset(
+    }
+
+    function getWalletByUsername(string calldata username) external view returns (address) {
+        return usernameToWallet[username];
+    }
+
+    function getUserByUsername(string calldata username) external view returns (User memory) {
+        address wallet = usernameToWallet[username];
+        require(wallet != address(0), "User not found");
+        require(users[wallet].active, "User not active");
+        return users[wallet];
+    }
+
+    function registerAsset(
         string calldata assetType,
         string calldata description
     ) external onlyRole(ASSET_CREATOR_ROLE) returns (uint256) {

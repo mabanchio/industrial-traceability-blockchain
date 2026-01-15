@@ -51,7 +51,7 @@ export default function Login({ onLoginSuccess }) {
     }
   };
 
-  // Verificar usuario en blockchain
+  // Verificar usuario en blockchain y recuperar wallet
   const checkUserInBlockchain = async (username) => {
     try {
       const workEnvironment = localStorage.getItem('workEnvironment');
@@ -63,36 +63,25 @@ export default function Login({ onLoginSuccess }) {
         return null;
       }
       
-      console.log('Verificando usuario en blockchain...');
+      console.log('Verificando usuario en blockchain por username:', username);
       const provider = new ethers.BrowserProvider(window.ethereum);
       const { CONTRACT_ABI } = await import('../config/abi.js');
+      const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
       
-      // Obtener cuentas de MetaMask
-      const accounts = await window.ethereum.request({
-        method: 'eth_accounts',
-      });
-      
-      if (!accounts || accounts.length === 0) {
-        console.log('Sin cuentas conectadas');
+      // Buscar usuario por username en blockchain
+      try {
+        const user = await contract.getUserByUsername(username);
+        if (user && user.active) {
+          console.log('✅ Usuario encontrado en blockchain:', user);
+          console.log('   - Wallet vinculada:', user.walletAddress);
+          console.log('   - Role:', user.role);
+          return user;
+        }
+      } catch (e) {
+        console.log('Usuario no encontrado en blockchain:', e.message);
         return null;
       }
       
-      const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
-      
-      // Intentar obtener datos del usuario de blockchain para cada cuenta
-      for (const account of accounts) {
-        try {
-          const user = await contract.getUser(account);
-          if (user && user.active) {
-            console.log('✅ Usuario encontrado en blockchain:', user);
-            return user;
-          }
-        } catch (e) {
-          // Usuario no existe en esta wallet
-        }
-      }
-      
-      console.log('Usuario no encontrado en blockchain');
       return null;
     } catch (error) {
       console.warn('Error verificando en blockchain:', error.message);

@@ -24,18 +24,42 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       setLoading(true);
       setError('');
 
-      // Siempre cargar detalles del usuario actual, independiente de si tiene wallet
+      // Cargar detalles del usuario actual
       if (currentUser) {
-        // En desarrollo, siempre usar datos locales (no usar blockchain)
         const registeredAt = currentUser.registeredAt || currentUser.timestamp;
+        
+        // Intentar obtener datos del blockchain si está en modo blockchain
+        const workEnvironment = localStorage.getItem('workEnvironment');
+        const contractAddress = localStorage.getItem('contractAddress');
+        let blockchainData = null;
+        
+        if (workEnvironment !== 'offline' && contractAddress && window.ethereum && !currentUser.isAdmin) {
+          try {
+            console.log('Obteniendo datos del blockchain para:', currentUser.username);
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const { CONTRACT_ABI } = await import('../config/abi.js');
+            const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
+            
+            blockchainData = await contract.getUserByUsername(currentUser.username);
+            console.log('✅ Datos recuperados del blockchain:', blockchainData);
+          } catch (err) {
+            console.warn('No se pudo obtener datos del blockchain:', err.message);
+            blockchainData = null;
+          }
+        }
+        
+        // Usar datos del blockchain si están disponibles, si no, usar datos locales
+        const walletAddress = blockchainData?.walletAddress || currentUser.walletAddress || null;
+        
         setUserDetails({
           username: currentUser.username,
-          walletAddress: currentUser.walletAddress || null,
+          walletAddress: walletAddress,
           role: currentUser.role,
           active: currentUser.active !== undefined ? currentUser.active : true,
           registeredAt: registeredAt ? new Date(registeredAt).toLocaleDateString() : new Date().toLocaleDateString(),
-          isOnchain: false,
-          isDevelopmentMode: true,
+          isOnchain: blockchainData ? true : false,
+          isDevelopmentMode: !blockchainData,
+          blockchainData: blockchainData,
         });
       }
 
@@ -465,6 +489,12 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
 
         <div className="profile-section">
           <h3>🔐 Información de Wallet</h3>
+          
+          {userDetails.isOnchain && (
+            <div style={{ padding: '10px', backgroundColor: '#d1fae5', borderRadius: '6px', borderLeft: '4px solid #10b981', marginBottom: '10px', fontSize: '12px', color: '#065f46' }}>
+              ✅ Datos recuperados de la blockchain
+            </div>
+          )}
           
           {!showWalletBinder && userDetails.walletAddress ? (
             <>
