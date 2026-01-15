@@ -33,23 +33,33 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
         const contractAddress = localStorage.getItem('contractAddress');
         let blockchainData = null;
         
+        console.log('📱 loadUserDetails iniciada');
+        console.log('   currentUser.username:', currentUser.username);
+        console.log('   currentUser.walletAddress:', currentUser.walletAddress);
+        console.log('   workEnvironment:', workEnvironment);
+        
         if (workEnvironment !== 'offline' && contractAddress && window.ethereum && !currentUser.isAdmin) {
           try {
-            console.log('Obteniendo datos del blockchain para:', currentUser.username);
+            console.log('🔗 Obteniendo datos del blockchain para:', currentUser.username);
             const provider = new ethers.BrowserProvider(window.ethereum);
             const { CONTRACT_ABI } = await import('../config/abi.js');
             const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
             
             blockchainData = await contract.getUserByUsername(currentUser.username);
             console.log('✅ Datos recuperados del blockchain:', blockchainData);
+            console.log('   blockchainData.walletAddress:', blockchainData?.walletAddress);
           } catch (err) {
-            console.warn('No se pudo obtener datos del blockchain:', err.message);
+            console.warn('⚠️ No se pudo obtener datos del blockchain:', err.message);
             blockchainData = null;
           }
         }
         
         // Usar datos del blockchain si están disponibles, si no, usar datos locales
         const walletAddress = blockchainData?.walletAddress || currentUser.walletAddress || null;
+        
+        console.log('💾 Configurando userDetails con:');
+        console.log('   walletAddress:', walletAddress);
+        console.log('   isOnchain:', blockchainData ? true : false);
         
         setUserDetails({
           username: currentUser.username,
@@ -519,21 +529,21 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
         <div className="profile-section">
           <h3>🔐 Información de Wallet</h3>
           
-          {userDetails.isOnchain && (
+          {userDetails?.isOnchain && (
             <div style={{ padding: '10px', backgroundColor: '#d1fae5', borderRadius: '6px', borderLeft: '4px solid #10b981', marginBottom: '10px', fontSize: '12px', color: '#065f46' }}>
               ✅ Datos recuperados de la blockchain
             </div>
           )}
           
-          {!showWalletBinder && userDetails.walletAddress ? (
+          {!showWalletBinder && userDetails?.walletAddress ? (
             <>
               <div className="profile-item">
                 <label>Dirección de Wallet:</label>
                 <div className="wallet-display">
-                  <code>{userDetails.walletAddress}</code>
+                  <code>{userDetails?.walletAddress}</code>
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(userDetails.walletAddress);
+                      navigator.clipboard.writeText(userDetails?.walletAddress);
                       alert('Wallet copiada al portapapeles');
                     }}
                     className="btn-small"
@@ -553,7 +563,7 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
                 </button>
               </div>
             </>
-          ) : !showWalletBinder && !userDetails.walletAddress ? (
+          ) : !showWalletBinder && !userDetails?.walletAddress ? (
             <div style={{ padding: '15px', backgroundColor: '#fef3c7', borderRadius: '8px', borderLeft: '4px solid #f59e0b' }}>
               <p style={{ margin: '0 0 10px 0', color: '#78350f' }}>
                 ⚠️ Sin wallet vinculada
