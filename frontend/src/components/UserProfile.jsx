@@ -35,10 +35,13 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
         
         console.log('📱 loadUserDetails iniciada');
         console.log('   currentUser.username:', currentUser.username);
+        console.log('   currentUser.role:', currentUser.role);
         console.log('   currentUser.walletAddress:', currentUser.walletAddress);
         console.log('   workEnvironment:', workEnvironment);
+        console.log('   contractAddress:', contractAddress);
+        console.log('   window.ethereum:', !!window.ethereum);
         
-        if (workEnvironment !== 'offline' && contractAddress && window.ethereum && !currentUser.isAdmin) {
+        if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
           try {
             console.log('🔗 Obteniendo datos del blockchain para:', currentUser.username);
             const provider = new ethers.BrowserProvider(window.ethereum);
@@ -60,6 +63,7 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
             console.log('   Wallet activa:', blockchainData.walletAddress);
           } catch (err) {
             console.warn('⚠️ No se pudo obtener datos del blockchain:', err.message);
+            console.warn('   Error code:', err.code);
             blockchainData = null;
           }
         }
@@ -68,7 +72,9 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
         const walletAddress = blockchainData?.walletAddress || currentUser.walletAddress || null;
         
         console.log('💾 Configurando userDetails con:');
-        console.log('   walletAddress:', walletAddress);
+        console.log('   walletAddress (blockchain):', blockchainData?.walletAddress);
+        console.log('   walletAddress (local):', currentUser.walletAddress);
+        console.log('   walletAddress (final):', walletAddress);
         console.log('   isOnchain:', blockchainData ? true : false);
         
         setUserDetails({
@@ -86,6 +92,7 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       setLoading(false);
     } catch (err) {
       setError(err.message || 'Error al cargar perfil');
+      console.error('❌ Error en loadUserDetails:', err);
       setLoading(false);
     }
   };
@@ -155,11 +162,12 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       setSuccess('');
 
       console.log('=== OBTENIENDO CUENTAS DE METAMASK ===');
+      console.log('usuario actual:', currentUser.username, 'rol:', currentUser.role);
 
       if (!window.ethereum) {
         const msg = 'MetaMask no está instalado. Instálalo desde https://metamask.io';
         setError(msg);
-        console.error(msg);
+        console.error('❌', msg);
         setBindingLoading(false);
         return;
       }
@@ -167,22 +175,27 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       if (!window.ethereum.isMetaMask) {
         const msg = 'Por favor instala MetaMask: https://metamask.io';
         setError(msg);
-        console.error(msg);
+        console.error('❌', msg);
         setBindingLoading(false);
         return;
       }
 
-      console.log('Solicitando cuentas de MetaMask...');
+      console.log('✅ MetaMask detectado');
+      console.log('⏳ Solicitando cuentas de MetaMask...');
       setError('⏳ Abriendo MetaMask para seleccionar cuenta...');
       
       let accounts;
       try {
+        console.log('📢 Llamando window.ethereum.request({method: eth_requestAccounts})');
         accounts = await window.ethereum.request({
           method: 'eth_requestAccounts',
         });
-        console.log('✅ Cuentas obtenidas:', accounts);
+        console.log('✅ Cuentas obtenidas:', accounts.length, 'cuentas');
+        accounts.forEach((acc, idx) => console.log(`   [${idx}]:`, acc));
       } catch (requestErr) {
-        console.error('❌ Error:', requestErr);
+        console.error('❌ Error en eth_requestAccounts:', requestErr);
+        console.error('   error.code:', requestErr.code);
+        console.error('   error.message:', requestErr.message);
         
         if (requestErr.code === 4001) {
           setError('Rechazaste la solicitud de conexión a MetaMask');
@@ -211,7 +224,8 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
         }
       }).filter(w => w !== null);
 
-      console.log('Cuentas formateadas:', formattedWallets);
+      console.log('✅ Cuentas formateadas:', formattedWallets.length);
+      formattedWallets.forEach((w, idx) => console.log(`   [${idx}]:`, w));
 
       if (formattedWallets.length === 0) {
         setError('Error al procesar las cuentas de MetaMask.');
@@ -228,7 +242,7 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
 
       console.log('=== SELECTOR DE CUENTAS LISTO ===');
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Error en handleConnectWallet:', err);
       setError(`Error: ${err.message}`);
       setBindingLoading(false);
     }
@@ -239,9 +253,63 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       setBindingLoading(true);
       setError('');
 
-      console.log('Vinculando wallet:', walletAddress);
+      console.log('🔗 Vinculando wallet:', walletAddress);
 
-      // Actualizar usuario con nueva wallet
+      const workEnvironment = localStorage.getItem('workEnvironment');
+      const contractAddress = localStorage.getItem('contractAddress');
+      
+      // Si estamos en modo blockchain, PRIMERO ejecutar la transacción
+      if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
+        try {
+          console.log('🔗 Ejecutando transacción en blockchain para vincular wallet');
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await provider.getSigner();
+          
+          // Importar ABI dinámicamente
+          const { CONTRACT_ABI } = await import('../config/abi.js');
+          const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
+          
+          // Obtener el rol del usuario
+          const blockchainRole = currentUser.role === 'ADMIN' ? 'ASSET_CREATOR' : currentUser.role;
+          
+          // IMPORTANTE: Ejecutar transacción ANTES de guardar localmente
+          console.log('⏳ Esperando confirmación de MetaMask...');
+          const tx = await contract.linkWalletToUser(
+            currentUser.username,
+            blockchainRole
+          );
+          
+          console.log('⏳ Esperando confirmación de transacción...');
+          await tx.wait();
+          console.log('✅ Wallet vinculada exitosamente en blockchain');
+          
+        } catch (blockchainError) {
+          // Si hay error en blockchain, NO guardar wallet localmente
+          const errorMsg = blockchainError.message?.toLowerCase() || '';
+          
+          // Casos especiales donde la wallet SÍ se vinculó
+          if (errorMsg.includes('wallet already active')) {
+            console.log('ℹ️ Wallet ya está activa para este usuario');
+          } else if (errorMsg.includes('user is inactive')) {
+            console.warn('⚠️ El usuario está inactivo en blockchain');
+          } else if (errorMsg.includes('user rejected') || errorMsg.includes('denied')) {
+            // Usuario canceló en MetaMask
+            setError('❌ Operación cancelada por el usuario');
+            setBindingLoading(false);
+            return; // SALIR SIN GUARDAR LA WALLET
+          } else {
+            // Otro error
+            console.error('❌ Error en blockchain:', blockchainError.message);
+            setError(`❌ Error al vincular en blockchain: ${blockchainError.message}`);
+            setBindingLoading(false);
+            return; // SALIR SIN GUARDAR LA WALLET
+          }
+        }
+      }
+
+      // AHORA sí guardar la wallet localmente (después de confirmar blockchain)
+      console.log('💾 Guardando wallet en localStorage');
+      
       const updatedUser = {
         ...currentUser,
         walletAddress: walletAddress,
@@ -258,7 +326,7 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       
       const updatedUsers = allUsers.map(u => {
         if (u.username === currentUser.username) {
-          console.log(`Actualizando usuario ${u.username} con wallet ${walletAddress}`);
+          console.log(`✅ Actualizando usuario ${u.username} con wallet ${walletAddress}`);
           return { ...u, walletAddress: walletAddress };
         }
         return u;
@@ -274,51 +342,7 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
 
       setShowWalletSelector(false);
       setAvailableWallets([]);
-      setError('');
       setSuccess('✅ Wallet vinculada correctamente');
-      
-      // Registrar en blockchain si estamos en modo blockchain
-      const workEnvironment = localStorage.getItem('workEnvironment');
-      const contractAddress = localStorage.getItem('contractAddress');
-      
-      if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
-        try {
-          console.log('Vinculando wallet en blockchain:', walletAddress);
-          const provider = new ethers.BrowserProvider(window.ethereum);
-          const signer = await provider.getSigner();
-          
-          // Importar ABI dinámicamente
-          const { CONTRACT_ABI } = await import('../config/abi.js');
-          const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
-          
-          // Vincular usuario a wallet en blockchain usando linkWalletToUser
-          try {
-            const blockchainRole = currentUser.role === 'ADMIN' ? 'ASSET_CREATOR' : currentUser.role;
-            const tx = await contract.linkWalletToUser(
-              currentUser.username,
-              blockchainRole
-            );
-            await tx.wait();
-            console.log('✅ Wallet vinculada a usuario en blockchain');
-            setSuccess('✅ Wallet vinculada y registrada en blockchain');
-          } catch (blockchainError) {
-            const errorMsg = blockchainError.message.toLowerCase();
-            if (errorMsg.includes('wallet already active')) {
-              console.log('ℹ️ Wallet ya está activa para este usuario');
-              setSuccess('✅ Wallet vinculada (ya registrada en blockchain)');
-            } else if (errorMsg.includes('user is inactive')) {
-              console.warn('⚠️ El usuario está inactivo en blockchain');
-              setSuccess('✅ Wallet vinculada (aunque el usuario está inactivo)');
-            } else {
-              console.warn('⚠️ Error vinculando wallet en blockchain:', blockchainError.message);
-              // La wallet está vinculada aunque no se registró en blockchain
-            }
-          }
-        } catch (error) {
-          console.warn('⚠️ No se pudo registrar en blockchain:', error.message);
-          // La wallet está vinculada aunque hubo error en blockchain
-        }
-      }
       
       // Limpiar mensaje de éxito después de 3 segundos
       setTimeout(() => setSuccess(''), 3000);
@@ -326,7 +350,7 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       // Recargar detalles del usuario
       await loadUserDetails();
       
-      console.log('=== VINCULACIÓN COMPLETADA ===');
+      console.log('=== ✅ VINCULACIÓN COMPLETADA ===');
       setBindingLoading(false);
       
     } catch (err) {
@@ -567,13 +591,22 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
                 </div>
               </div>
 
-              <div style={{ marginTop: '10px' }}>
+              <div style={{ marginTop: '10px', display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => setShowWalletBinder(true)}
+                  disabled={loading}
+                  className="btn-primary"
+                  style={{ flex: 1 }}
+                >
+                  🔄 Cambiar Wallet
+                </button>
                 <button
                   onClick={handleUnlinkWallet}
                   disabled={loading}
                   className="btn-warning"
+                  style={{ flex: 1 }}
                 >
-                  🔓 Desvinacular Mi Wallet
+                  🔓 Desvinacular
                 </button>
               </div>
             </>

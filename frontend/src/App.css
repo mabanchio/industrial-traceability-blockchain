@@ -819,3 +819,4 @@ button:disabled {
   .admin-form { grid-template-columns: 1fr; }
   .users-table { font-size: 12px; }
   .users-table th, .users-table td { padding: 10px; }
+}
