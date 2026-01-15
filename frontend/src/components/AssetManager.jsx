@@ -28,15 +28,33 @@ export default function AssetManager({ signer, contractAddress }) {
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
 
-  // Detectar modo offline
+  // Detectar modo offline y recargar cuando cambia
   useEffect(() => {
     const workEnvironment = localStorage.getItem('workEnvironment');
-    setIsOfflineMode(workEnvironment === 'offline');
-    loadAssets();
-  }, []);
+    const offline = workEnvironment === 'offline';
+    setIsOfflineMode(offline);
+    
+    // Mostrar advertencia si cambias de offline a blockchain
+    if (!offline && assets.length > 0) {
+      setMessage('⚠️ Cambiaste a red blockchain. Los activos offline locales no son visibles aquí.');
+      setTimeout(() => setMessage(''), 4000);
+      setAssets([]); // Limpiar activos locales
+    } else if (offline) {
+      loadAssets(); // Cargar activos si vuelves a offline
+    }
+  }, [localStorage.getItem('workEnvironment')]);
 
-  // Cargar activos desde localStorage
+  // Cargar activos desde localStorage (SOLO en modo offline)
   const loadAssets = () => {
+    const workEnvironment = localStorage.getItem('workEnvironment');
+    
+    // Si no estamos en offline, no cargar de localStorage
+    if (workEnvironment !== 'offline') {
+      setAssets([]);
+      setHistory([]);
+      return;
+    }
+    
     const savedAssets = localStorage.getItem('assets');
     const savedHistory = localStorage.getItem('assetHistory');
     if (savedAssets) {
@@ -288,10 +306,16 @@ export default function AssetManager({ signer, contractAddress }) {
   return (
     <div className="card">
       <h2>📦 Gestión de Activos Industriales</h2>
-      {isOfflineMode && (
+      {isOfflineMode ? (
         <div style={{ backgroundColor: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '8px', padding: '10px', marginBottom: '15px' }}>
           <p style={{ margin: '0', fontSize: '12px', color: '#78350f' }}>
             💾 <strong>Modo Offline:</strong> Los activos se guardan localmente en tu navegador
+          </p>
+        </div>
+      ) : (
+        <div style={{ backgroundColor: '#dbeafe', border: '1px solid #93c5fd', borderRadius: '8px', padding: '10px', marginBottom: '15px' }}>
+          <p style={{ margin: '0', fontSize: '12px', color: '#1e3a8a' }}>
+            ⛓️ <strong>Modo Blockchain:</strong> Los activos se registran en la red configurada (datos locales offline no son visibles)
           </p>
         </div>
       )}
