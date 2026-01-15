@@ -12,9 +12,10 @@ export default function Dashboard({ provider, signer, contractAddress, blockchai
     const savedRpcUrl = localStorage.getItem('rpcUrl') || '';
     
     setConfigContractAddress(savedContractAddress);
-    setConfigNetworkName(savedNetworkName);
+    // En modo offline, no mostrar nombre de red guardado
+    setConfigNetworkName(workEnvironment === 'offline' ? '' : savedNetworkName);
     setRpcUrl(savedRpcUrl);
-  }, [contractAddress]);
+  }, [contractAddress, workEnvironment]);
 
   const getEnvironmentColor = () => {
     const colors = {
@@ -107,9 +108,11 @@ export default function Dashboard({ provider, signer, contractAddress, blockchai
           <ul style={{ margin: '0', paddingLeft: '20px', fontSize: '12px' }}>
             <li>{workEnvironment ? '✅' : '❌'} Entorno: {getEnvironmentName().split(' ')[0]}</li>
             {workEnvironment !== 'offline' && (
-              <li>{configContractAddress && configContractAddress !== 'No configurado' ? '✅' : '❌'} Contrato</li>
+            <li>{workEnvironment !== 'offline' && configContractAddress && configContractAddress !== 'No configurado' ? '✅' : '❌'} Contrato</li>
             )}
-            <li>{configNetworkName ? '✅' : '❌'} Red: {configNetworkName.split(' ')[0]}</li>
+            {workEnvironment !== 'offline' && (
+              <li>{configNetworkName ? '✅' : '❌'} Red: {configNetworkName.split(' ')[0]}</li>
+            )}
           </ul>
           <p style={{ fontSize: '11px', color: '#15803d', marginTop: '8px', marginBottom: '0' }}>
             {workEnvironment === 'offline' || !configContractAddress || configContractAddress === 'No configurado' 
