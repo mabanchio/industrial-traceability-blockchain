@@ -174,13 +174,26 @@ export default function AdminPanel({ contract, provider, currentUser }) {
       setSuccess('');
 
       // Si hay contrato blockchain disponible, usar la blockchain
-      if (contract && newUser.walletAddress) {
-        const tx = await contract.registerUser(
-          newUser.walletAddress,
-          newUser.username,
-          newUser.role
-        );
-        await tx.wait();
+      const workEnvironment = localStorage.getItem('workEnvironment');
+      const contractAddress = localStorage.getItem('contractAddress');
+      
+      if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
+        try {
+          console.log('🔗 Registrando usuario en blockchain:', newUser.username);
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await provider.getSigner();
+          const { CONTRACT_ABI } = await import('../config/abi.js');
+          const blockchainContract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
+          
+          // Llamar a registerUser con username y role (sin wallet)
+          const tx = await blockchainContract.registerUser(newUser.username, newUser.role);
+          await tx.wait();
+          console.log('✅ Usuario registrado en blockchain');
+          setSuccess(`Usuario ${newUser.username} registrado en blockchain`);
+        } catch (blockchainError) {
+          console.warn('⚠️ Error registrando en blockchain:', blockchainError.message);
+          setError(`Blockchain: ${blockchainError.message}`);
+        }
       }
 
       // Siempre guardar localmente - evitar duplicados
