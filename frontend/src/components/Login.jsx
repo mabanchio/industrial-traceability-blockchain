@@ -265,6 +265,41 @@ export default function Login({ onLoginSuccess }) {
       localStorage.setItem('walletAddress', walletAddress);
 
       console.log('Datos guardados, userData:', userData);
+      
+      // Intentar registrar en blockchain si estamos conectados
+      const workEnvironment = localStorage.getItem('workEnvironment');
+      const contractAddress = localStorage.getItem('contractAddress');
+      
+      if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
+        try {
+          console.log('Registrando usuario en blockchain...');
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await provider.getSigner();
+          const { CONTRACT_ABI } = await import('../config/abi.js');
+          const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
+          
+          // Intentar registrar el usuario
+          try {
+            const tx = await contract.registerUser(
+              walletAddress,
+              authenticatedUser.loginUser,
+              authenticatedUser.role === 'ADMIN' ? 'ASSET_CREATOR' : authenticatedUser.role
+            );
+            await tx.wait();
+            console.log('✅ Usuario registrado en blockchain');
+          } catch (error) {
+            // Ignorar errores de usuario ya existente
+            if (error.message.includes('User already registered') || error.message.includes('already')) {
+              console.log('ℹ️ Usuario ya existe en blockchain');
+            } else {
+              console.warn('⚠️ Error registrando en blockchain:', error.message);
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ No se pudo registrar en blockchain:', error.message);
+        }
+      }
+      
       console.log('=== LOGIN CON METAMASK COMPLETADO ===');
 
       onLoginSuccess(userData);
