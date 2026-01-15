@@ -84,12 +84,41 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
     try {
       setLoading(true);
       setError('');
+      setSuccess('');
 
-      // Actualizar usuario removiendo wallet
+      // Desvincular en blockchain si está en modo blockchain
+      const workEnvironment = localStorage.getItem('workEnvironment');
+      const contractAddress = localStorage.getItem('contractAddress');
+      
+      if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
+        try {
+          console.log('📝 Desvinculando wallet en blockchain...');
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await provider.getSigner();
+          const { CONTRACT_ABI } = await import('../config/abi.js');
+          const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
+          
+          // Llamar a unlinkWallet en blockchain
+          const tx = await contract.unlinkWallet(currentUser.username);
+          console.log('⏳ Esperando confirmación...');
+          const receipt = await tx.wait();
+          console.log('✅ Wallet desvinculada en blockchain');
+          console.log('   - TX Hash:', receipt.hash);
+          setSuccess('✅ Wallet desvinculada de blockchain');
+        } catch (err) {
+          console.warn('⚠️ Error desvinculando en blockchain:', err.message);
+          setError('Error al desvinacular en blockchain: ' + err.message);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Actualizar usuario removiendo wallet localmente
       const updatedUser = { ...currentUser, walletAddress: null, needsWalletBinding: true };
       localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      localStorage.removeItem('walletAddress');
 
-      setUserDetails({ ...userDetails, walletAddress: null });
+      setUserDetails({ ...userDetails, walletAddress: null, isOnchain: false });
       setShowWalletBinder(true);
 
       setLoading(false);
@@ -514,17 +543,15 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
                 </div>
               </div>
 
-              {currentUser?.role === 'ADMIN' && (
-                <div style={{ marginTop: '10px' }}>
-                  <button
-                    onClick={handleUnlinkWallet}
-                    disabled={loading}
-                    className="btn-warning"
-                  >
-                    🔓 Desvinacular Mi Wallet
-                  </button>
-                </div>
-              )}
+              <div style={{ marginTop: '10px' }}>
+                <button
+                  onClick={handleUnlinkWallet}
+                  disabled={loading}
+                  className="btn-warning"
+                >
+                  🔓 Desvinacular Mi Wallet
+                </button>
+              </div>
             </>
           ) : !showWalletBinder && !userDetails.walletAddress ? (
             <div style={{ padding: '15px', backgroundColor: '#fef3c7', borderRadius: '8px', borderLeft: '4px solid #f59e0b' }}>

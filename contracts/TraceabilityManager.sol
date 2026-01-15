@@ -52,6 +52,7 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
     event CertificateRevoked(uint256 indexed certId);
     event UserRegistered(address indexed walletAddress, string username, string role);
     event UserWalletLinked(address indexed walletAddress, string username, string role);
+    event UserWalletUnlinked(address indexed walletAddress, string username);
     event RoleAssigned(address indexed walletAddress, string role);
     event RoleRevoked(address indexed walletAddress, string role);
 
@@ -141,6 +142,34 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
         }
 
         emit UserWalletLinked(msg.sender, username, role);
+    }
+
+    // Permitir a usuario desvincularse de su wallet
+    function unlinkWallet(string calldata username) external {
+        require(bytes(username).length > 0, "Invalid username");
+        
+        address walletAddress = usernameToWallet[username];
+        require(walletAddress != address(0), "User not found");
+        require(walletAddress == msg.sender, "Can only unlink your own wallet");
+        
+        // Obtener datos del usuario antes de desvincular
+        User storage user = users[walletAddress];
+        require(user.active, "User not active");
+        
+        // Desvincular wallet manteniendo el usuario activo
+        // Reemplazamos la wallet con address(0) para representar desvinculación
+        delete usernameToWallet[username];
+        delete users[walletAddress];
+        
+        // Revocar roles
+        if (hasRole(CERTIFIER_ROLE, walletAddress)) {
+            _revokeRole(CERTIFIER_ROLE, walletAddress);
+        }
+        if (hasRole(ASSET_CREATOR_ROLE, walletAddress)) {
+            _revokeRole(ASSET_CREATOR_ROLE, walletAddress);
+        }
+        
+        emit UserWalletUnlinked(walletAddress, username);
     }
 
     function assignRole(address walletAddress, string calldata newRole)

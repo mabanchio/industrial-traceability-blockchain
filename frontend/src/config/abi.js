@@ -301,6 +301,25 @@ export const CONTRACT_ABI = [
     "type": "event"
   },
   {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "walletAddress",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
+      }
+    ],
+    "name": "UserWalletUnlinked",
+    "type": "event"
+  },
+  {
     "inputs": [],
     "name": "ASSET_CREATOR_ROLE",
     "outputs": [
@@ -1001,6 +1020,19 @@ export const CONTRACT_ABI = [
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
+      }
+    ],
+    "name": "unlinkWallet",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   }
 ];
