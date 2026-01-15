@@ -210,7 +210,7 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       
       if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
         try {
-          console.log('Registrando usuario en blockchain con wallet:', walletAddress);
+          console.log('Vinculando wallet en blockchain:', walletAddress);
           const provider = new ethers.BrowserProvider(window.ethereum);
           const signer = await provider.getSigner();
           
@@ -218,22 +218,22 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
           const { CONTRACT_ABI } = await import('../config/abi.js');
           const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
           
-          // Registrar usuario en blockchain
+          // Vincular usuario a wallet en blockchain usando linkWalletToUser
           try {
-            const tx = await contract.registerUser(
-              walletAddress,
+            const blockchainRole = currentUser.role === 'ADMIN' ? 'ASSET_CREATOR' : currentUser.role;
+            const tx = await contract.linkWalletToUser(
               currentUser.username,
-              currentUser.role === 'ADMIN' ? 'ASSET_CREATOR' : currentUser.role
+              blockchainRole
             );
             await tx.wait();
-            console.log('✅ Usuario registrado en blockchain');
+            console.log('✅ Wallet vinculada a usuario en blockchain');
             setSuccess('✅ Wallet vinculada y registrada en blockchain');
           } catch (blockchainError) {
-            if (blockchainError.message.includes('already') || blockchainError.message.includes('User already')) {
-              console.log('ℹ️ Usuario ya existe en blockchain');
-              setSuccess('✅ Wallet vinculada (usuario ya en blockchain)');
+            if (blockchainError.message.includes('already') || blockchainError.message.includes('Wallet already linked')) {
+              console.log('ℹ️ Wallet ya está vinculada en blockchain');
+              setSuccess('✅ Wallet vinculada (ya registrada en blockchain)');
             } else {
-              console.warn('⚠️ Error registrando en blockchain:', blockchainError.message);
+              console.warn('⚠️ Error vinculando wallet en blockchain:', blockchainError.message);
               // La wallet está vinculada aunque no se registró en blockchain
             }
           }

@@ -131,6 +131,26 @@ export default function Login({ onLoginSuccess }) {
     
     // En blockchain: verificar si usuario existe con wallet vinculada
     if (workEnvironment !== 'offline') {
+      // El admin NO necesita wallet para usar el sistema
+      if (username === 'admin') {
+        console.log('✅ Admin puede loguearse sin wallet');
+        const userData = {
+          username: username,
+          role: user.role,
+          active: true,
+          walletAddress: null,  // Admin no necesita wallet
+          registeredAt: new Date().toISOString(),
+          isMetaMaskUser: false,
+          isAdmin: true,
+        };
+        
+        localStorage.setItem('currentUser', JSON.stringify(userData));
+        
+        onLoginSuccess(userData);
+        setLoading(false);
+        return;
+      }
+      
       console.log('Verificando en blockchain...');
       const blockchainUser = await checkUserInBlockchain(username);
       
