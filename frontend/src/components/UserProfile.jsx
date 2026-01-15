@@ -45,9 +45,19 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
             const { CONTRACT_ABI } = await import('../config/abi.js');
             const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
             
-            blockchainData = await contract.getUserByUsername(currentUser.username);
+            const [username, role, active, registeredAt, activeWallet] = 
+              await contract.getUserByUsername(currentUser.username);
+            
+            blockchainData = {
+              username,
+              role,
+              active,
+              registeredAt: new Date(registeredAt * 1000).toISOString(),
+              walletAddress: activeWallet === ethers.ZeroAddress ? null : activeWallet,
+            };
+            
             console.log('✅ Datos recuperados del blockchain:', blockchainData);
-            console.log('   blockchainData.walletAddress:', blockchainData?.walletAddress);
+            console.log('   Wallet activa:', blockchainData.walletAddress);
           } catch (err) {
             console.warn('⚠️ No se pudo obtener datos del blockchain:', err.message);
             blockchainData = null;
@@ -292,9 +302,13 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
             console.log('✅ Wallet vinculada a usuario en blockchain');
             setSuccess('✅ Wallet vinculada y registrada en blockchain');
           } catch (blockchainError) {
-            if (blockchainError.message.includes('already') || blockchainError.message.includes('Wallet already linked')) {
-              console.log('ℹ️ Wallet ya está vinculada en blockchain');
+            const errorMsg = blockchainError.message.toLowerCase();
+            if (errorMsg.includes('wallet already active')) {
+              console.log('ℹ️ Wallet ya está activa para este usuario');
               setSuccess('✅ Wallet vinculada (ya registrada en blockchain)');
+            } else if (errorMsg.includes('user is inactive')) {
+              console.warn('⚠️ El usuario está inactivo en blockchain');
+              setSuccess('✅ Wallet vinculada (aunque el usuario está inactivo)');
             } else {
               console.warn('⚠️ Error vinculando wallet en blockchain:', blockchainError.message);
               // La wallet está vinculada aunque no se registró en blockchain

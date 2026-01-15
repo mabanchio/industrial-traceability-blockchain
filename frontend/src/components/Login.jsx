@@ -70,12 +70,26 @@ export default function Login({ onLoginSuccess }) {
       
       // Buscar usuario por username en blockchain
       try {
-        const user = await contract.getUserByUsername(username);
-        if (user && user.active) {
-          console.log('✅ Usuario encontrado en blockchain:', user);
-          console.log('   - Wallet vinculada:', user.walletAddress);
-          console.log('   - Role:', user.role);
-          return user;
+        const [user_username, role, active, registeredAt, activeWallet] = 
+          await contract.getUserByUsername(username);
+        
+        if (active) {
+          console.log('✅ Usuario encontrado en blockchain:', {
+            username: user_username,
+            role,
+            active,
+            activeWallet,
+          });
+          console.log('   - Wallet activa:', activeWallet === ethers.ZeroAddress ? 'NINGUNA' : activeWallet);
+          console.log('   - Role:', role);
+          
+          return {
+            username: user_username,
+            role,
+            active,
+            walletAddress: activeWallet === ethers.ZeroAddress ? null : activeWallet,
+            registeredAt: new Date(registeredAt * 1000).toISOString(),
+          };
         }
       } catch (e) {
         console.log('Usuario no encontrado en blockchain:', e.message);
@@ -143,15 +157,15 @@ export default function Login({ onLoginSuccess }) {
       console.log('Verificando en blockchain...');
       const blockchainUser = await checkUserInBlockchain(username);
       
-      if (blockchainUser) {
-        // Usuario existe en blockchain con wallet
-        console.log('✅ Usuario existe en blockchain con wallet');
+      if (blockchainUser && blockchainUser.walletAddress) {
+        // Usuario existe en blockchain CON wallet activa
+        console.log('✅ Usuario existe en blockchain con wallet activa');
         const userData = {
           username: username,
           role: user.role,
           active: true,
           walletAddress: blockchainUser.walletAddress,
-          registeredAt: new Date().toISOString(),
+          registeredAt: blockchainUser.registeredAt,
           isMetaMaskUser: true,
         };
         
@@ -161,13 +175,43 @@ export default function Login({ onLoginSuccess }) {
         onLoginSuccess(userData);
         setLoading(false);
         return;
-      } else {
-        // Usuario NO existe en blockchain, requiere wallet
-        console.log('Usuario no en blockchain, requiere seleccionar wallet');
+      } else if (blockchainUser && !blockchainUser.walletAddress) {
+        // Usuario existe en blockchain pero SIN wallet activa
+        console.log('Usuario existe en blockchain pero sin wallet activa');
         setAuthenticatedUser({
           loginUser: username,
           displayName: user.username || username,
           role: user.role,
+          registeredInBlockchain: true,
+        });
+        setStep('wallet');
+        setLoading(false);
+        
+        // Conectar MetaMask automáticamente
+        try {
+          const accounts = await window.ethereum.request({
+            method: 'eth_requestAccounts',
+          });
+          
+          if (accounts.length > 0) {
+            setWalletAddress(accounts[0]);
+            setSelectedWalletIndex(0);
+            setAvailableWallets(accounts);
+            setShowWalletSelector(accounts.length > 1);
+          }
+        } catch (err) {
+          console.warn('Error conectando MetaMask:', err.message);
+        }
+        
+        return;
+      } else {
+        // Usuario NO existe en blockchain, requiere registro y wallet
+        console.log('Usuario no en blockchain, requiere registro y wallet');
+        setAuthenticatedUser({
+          loginUser: username,
+          displayName: user.username || username,
+          role: user.role,
+          registeredInBlockchain: false,
         });
         setStep('wallet');
         setLoading(false);
@@ -419,11 +463,14 @@ export default function Login({ onLoginSuccess }) {
             console.log('   - TX Hash:', receipt.hash);
             console.log('   - Gas usado:', receipt.gasUsed.toString());
           } catch (error) {
-            // Ignorar errores de usuario ya existente
-            if (error.message.includes('Wallet already linked') || error.message.includes('already')) {
-              console.log('ℹ️ Wallet ya está vinculada al usuario en blockchain');
+            // Manejar diferentes casos de error
+            const errorMsg = error.message.toLowerCase();
+            if (errorMsg.includes('wallet already active')) {
+              console.log('ℹ️ Wallet ya está activa para este usuario');
+            } else if (errorMsg.includes('user is inactive')) {
+              console.warn('⚠️ El usuario está inactivo en blockchain');
             } else {
-              console.warn('⚠️ Error vinculando wallet en blockchain:', error.message);
+              console.warn('⚠️ Error vinculando wallet:', error.message);
             }
           }
         } catch (error) {
