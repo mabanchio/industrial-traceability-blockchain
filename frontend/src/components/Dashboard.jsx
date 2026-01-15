@@ -122,8 +122,6 @@ export default function Dashboard({ provider, signer, contractAddress, blockchai
               : '⚠️ Configuración incompleta'}
           </p>
         </div>
-          </p>
-        </div>
 
         {/* Características */}
         <div className="info-item">
