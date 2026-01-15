@@ -204,6 +204,45 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       setError('');
       setSuccess('✅ Wallet vinculada correctamente');
       
+      // Registrar en blockchain si estamos en modo blockchain
+      const workEnvironment = localStorage.getItem('workEnvironment');
+      const contractAddress = localStorage.getItem('contractAddress');
+      
+      if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
+        try {
+          console.log('Registrando usuario en blockchain con wallet:', walletAddress);
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await provider.getSigner();
+          
+          // Importar ABI dinámicamente
+          const { CONTRACT_ABI } = await import('../config/abi.js');
+          const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
+          
+          // Registrar usuario en blockchain
+          try {
+            const tx = await contract.registerUser(
+              walletAddress,
+              currentUser.username,
+              currentUser.role === 'ADMIN' ? 'ASSET_CREATOR' : currentUser.role
+            );
+            await tx.wait();
+            console.log('✅ Usuario registrado en blockchain');
+            setSuccess('✅ Wallet vinculada y registrada en blockchain');
+          } catch (blockchainError) {
+            if (blockchainError.message.includes('already') || blockchainError.message.includes('User already')) {
+              console.log('ℹ️ Usuario ya existe en blockchain');
+              setSuccess('✅ Wallet vinculada (usuario ya en blockchain)');
+            } else {
+              console.warn('⚠️ Error registrando en blockchain:', blockchainError.message);
+              // La wallet está vinculada aunque no se registró en blockchain
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ No se pudo registrar en blockchain:', error.message);
+          // La wallet está vinculada aunque hubo error en blockchain
+        }
+      }
+      
       // Limpiar mensaje de éxito después de 3 segundos
       setTimeout(() => setSuccess(''), 3000);
       

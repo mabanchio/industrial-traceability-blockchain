@@ -75,6 +75,51 @@ export default function App() {
   }, []);
 
   // Escuchar cambios en la configuración del contrato
+  // Limpiar usuarios cuando cambia a modo blockchain
+  useEffect(() => {
+    const handleWorkEnvironmentChange = (e) => {
+      if (e.key === 'workEnvironment' && e.newValue) {
+        const newEnvironment = e.newValue;
+        
+        // Si cambias a blockchain (no offline), limpiar usuarios excepto admin
+        if (newEnvironment !== 'offline') {
+          console.log('🔄 Cambiando a blockchain: limpiando usuarios locales...');
+          
+          try {
+            // Obtener usuario actual
+            const currentUserStr = localStorage.getItem('currentUser');
+            const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+            
+            // Si el usuario actual es admin, mantenerlo
+            if (currentUser && currentUser.role === 'ADMIN') {
+              console.log('✅ Admin mantenido, requiriendo vinculación de wallet para otros usuarios');
+              // El admin continúa, pero otros usuarios necesitarán vincular wallet
+            } else {
+              // Si no es admin, limpiar la sesión
+              localStorage.removeItem('currentUser');
+              localStorage.removeItem('walletAddress');
+              setCurrentUser(null);
+              setActiveTab('login');
+              console.log('⚠️ Sesión limpiada - requiere re-login con wallet vinculada');
+            }
+            
+            // Limpiar lista de usuarios (no se necesita en blockchain)
+            localStorage.removeItem('allUsers');
+            
+          } catch (error) {
+            console.error('Error limpiando usuarios:', error);
+          }
+        }
+        
+        setWorkEnvironment(newEnvironment);
+        updateBlockchainStatus(newEnvironment);
+      }
+    };
+
+    window.addEventListener('storage', handleWorkEnvironmentChange);
+    return () => window.removeEventListener('storage', handleWorkEnvironmentChange);
+  }, []);
+
   useEffect(() => {
     const handleStorageChange = (e) => {
       if (e.key === 'contractAddress' && e.newValue) {
