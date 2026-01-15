@@ -206,6 +206,34 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * Admin puede desvinacular la wallet activa de un usuario
+     * Desactiva wallet y auto-activa la siguiente si existe
+     */
+    function adminUnlinkWallet(string calldata username) 
+        external 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
+        nonReentrant 
+    {
+        require(bytes(username).length > 0, "Invalid username");
+        
+        User storage user = users[username];
+        require(user.registeredAt != 0, "User not found");
+        require(user.active, "User is inactive");
+        require(user.activeWallet != address(0), "No active wallet to unlink");
+
+        address walletToUnlink = user.activeWallet;
+        _deactivateWallet(username, walletToUnlink);
+
+        // Activar la siguiente wallet si existe
+        for (uint256 i = 0; i < user.wallets.length; i++) {
+            if (user.wallets[i] != walletToUnlink && walletInfo[user.wallets[i]].linkedAt > 0) {
+                _activateWallet(username, user.wallets[i]);
+                break;
+            }
+        }
+    }
+
+    /**
      * Cambia el role de un usuario
      */
     function assignRole(

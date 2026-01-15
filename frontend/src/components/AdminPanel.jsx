@@ -338,6 +338,30 @@ export default function AdminPanel({ contract, provider, currentUser }) {
       setError('');
       setSuccess('');
 
+      // Ejecutar desvinculación en blockchain si está disponible
+      const workEnvironment = localStorage.getItem('workEnvironment');
+      const contractAddress = localStorage.getItem('contractAddress');
+      
+      if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
+        try {
+          console.log('🔗 Desvinculando wallet en blockchain para:', username);
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await provider.getSigner();
+          const { CONTRACT_ABI } = await import('../config/abi.js');
+          const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
+          
+          // Llamar a adminUnlinkWallet (requiere ser admin)
+          const tx = await contract.adminUnlinkWallet(username);
+          await tx.wait();
+          console.log('✅ Wallet desvinculada en blockchain');
+          setSuccess(`Wallet desvinculada de ${username} en blockchain`);
+        } catch (blockchainError) {
+          console.warn('⚠️ Error desvinculando en blockchain:', blockchainError.message);
+          // Continuar con actualización local aunque falle blockchain
+          setError(`Blockchain: ${blockchainError.message}`);
+        }
+      }
+
       // Actualizar usuario removiendo wallet
       const updatedUsers = users.map((u) =>
         u.walletAddress === walletAddress 

@@ -1,5 +1,5 @@
 // Auto-generated ABI file - DO NOT EDIT MANUALLY
-// Generated on: 2026-01-15T15:32:59.199Z
+// Generated on: 2026-01-15T15:51:46.910Z
 
 export const CONTRACT_ABI = [
   {
@@ -470,6 +470,19 @@ export const CONTRACT_ABI = [
       }
     ],
     "name": "activateUser",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
+      }
+    ],
+    "name": "adminUnlinkWallet",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
