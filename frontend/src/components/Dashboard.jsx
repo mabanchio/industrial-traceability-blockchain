@@ -108,16 +108,20 @@ export default function Dashboard({ provider, signer, contractAddress, blockchai
           <ul style={{ margin: '0', paddingLeft: '20px', fontSize: '12px' }}>
             <li>{workEnvironment ? '✅' : '❌'} Entorno: {getEnvironmentName().split(' ')[0]}</li>
             {workEnvironment !== 'offline' && (
-            <li>{workEnvironment !== 'offline' && configContractAddress && configContractAddress !== 'No configurado' ? '✅' : '❌'} Contrato</li>
+              <li>{configContractAddress && configContractAddress !== 'No configurado' ? '✅' : '❌'} Contrato</li>
             )}
             {workEnvironment !== 'offline' && (
               <li>{configNetworkName ? '✅' : '❌'} Red: {configNetworkName.split(' ')[0]}</li>
             )}
           </ul>
           <p style={{ fontSize: '11px', color: '#15803d', marginTop: '8px', marginBottom: '0' }}>
-            {workEnvironment === 'offline' || !configContractAddress || configContractAddress === 'No configurado' 
-              ? '⚠️ Configuración incompleta' 
-              : '✅ Sistema listo'}
+            {workEnvironment === 'offline' 
+              ? '✅ Sistema listo (Modo offline)' 
+              : (configContractAddress && configContractAddress !== 'No configurado' && configNetworkName)
+              ? '✅ Sistema completamente configurado'
+              : '⚠️ Configuración incompleta'}
+          </p>
+        </div>
           </p>
         </div>
 
