@@ -9,7 +9,7 @@ import Dashboard from './components/Dashboard';
 import { CONTRACT_ABI } from './config/abi';
 import './App.css';
 
-const DEFAULT_CONTRACT_ADDRESS = '0x5fbdb2315678afccb333f8a9c12e1f0d7a8f7cbc';
+const DEFAULT_CONTRACT_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
 
 export default function App() {
   const [account, setAccount] = useState(null);

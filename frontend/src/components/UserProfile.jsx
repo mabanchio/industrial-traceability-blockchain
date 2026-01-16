@@ -30,7 +30,15 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
         
         // Intentar obtener datos del blockchain si está en modo blockchain
         const workEnvironment = localStorage.getItem('workEnvironment');
-        const contractAddress = localStorage.getItem('contractAddress');
+        let contractAddress = localStorage.getItem('contractAddress');
+        const rpcUrl = localStorage.getItem('rpcUrl');
+        
+        // Usar dirección default si no está en localStorage
+        if (!contractAddress) {
+          contractAddress = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+          console.log('   ℹ️ contractAddress no estaba en localStorage, usando default');
+        }
+        
         let blockchainData = null;
         
         console.log('📱 loadUserDetails iniciada');
@@ -39,23 +47,47 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
         console.log('   currentUser.walletAddress:', currentUser.walletAddress);
         console.log('   workEnvironment:', workEnvironment);
         console.log('   contractAddress:', contractAddress);
+        console.log('   rpcUrl:', rpcUrl);
         console.log('   window.ethereum:', !!window.ethereum);
+        console.log('   Condición blockchain (workEnvironment !== offline && contractAddress):', workEnvironment !== 'offline' && !!contractAddress);
         
-        if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
+        if (workEnvironment && workEnvironment !== 'offline' && contractAddress) {
           try {
             console.log('🔗 Obteniendo datos del blockchain para:', currentUser.username);
-            const provider = new ethers.BrowserProvider(window.ethereum);
+            let provider;
+            
+            // Intentar usar Metamask primero, luego RPC directo
+            if (window.ethereum) {
+              console.log('   Usando Metamask (window.ethereum)');
+              provider = new ethers.BrowserProvider(window.ethereum);
+            } else if (rpcUrl) {
+              console.log('   Usando RPC directo:', rpcUrl);
+              provider = new ethers.JsonRpcProvider(rpcUrl);
+            } else {
+              // Default para desarrollo local
+              console.log('   Usando RPC por defecto: http://localhost:8545');
+              provider = new ethers.JsonRpcProvider('http://localhost:8545');
+            }
+            
             const { CONTRACT_ABI } = await import('../config/abi.js');
             const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
             
             const [username, role, active, registeredAt, activeWallet] = 
               await contract.getUserByUsername(currentUser.username);
             
+            console.log('📞 Respuesta de getUserByUsername:');
+            console.log('   username:', username);
+            console.log('   role:', role);
+            console.log('   active:', active);
+            console.log('   registeredAt:', registeredAt);
+            console.log('   activeWallet:', activeWallet);
+            console.log('   ¿Es ZeroAddress?:', activeWallet === ethers.ZeroAddress);
+            
             blockchainData = {
               username,
               role,
               active,
-              registeredAt: new Date(registeredAt * 1000).toISOString(),
+              registeredAt: new Date(Number(registeredAt) * 1000).toISOString(),
               walletAddress: activeWallet === ethers.ZeroAddress ? null : activeWallet,
             };
             
@@ -64,6 +96,8 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
           } catch (err) {
             console.warn('⚠️ No se pudo obtener datos del blockchain:', err.message);
             console.warn('   Error code:', err.code);
+            console.warn('   Error completo:', err);
+            console.warn('   Stack:', err.stack);
             blockchainData = null;
           }
         }
@@ -77,14 +111,38 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
         console.log('   walletAddress (final):', walletAddress);
         console.log('   isOnchain:', blockchainData ? true : false);
         
+        // Formatear fecha en formato: "16 enero 2026 13:26"
+        const formatearFecha = (dateString) => {
+          try {
+            const date = new Date(dateString);
+            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+            const dia = date.getDate();
+            const mes = meses[date.getMonth()];
+            const año = date.getFullYear();
+            const horas = String(date.getHours()).padStart(2, '0');
+            const minutos = String(date.getMinutes()).padStart(2, '0');
+            return `${dia} ${mes} ${año} ${horas}:${minutos}`;
+          } catch (err) {
+            return dateString;
+          }
+        };
+        
+        const registeredAtFormatted = blockchainData?.registeredAt 
+          ? formatearFecha(blockchainData.registeredAt) 
+          : (currentUser.registeredAt ? formatearFecha(currentUser.registeredAt) : formatearFecha(new Date().toISOString()));
+        
+        // isDevelopmentMode es true solo si NO está conectado a blockchain
+        // Si está conectado a cualquier red blockchain (no offline), es Producción
+        const isDev = workEnvironment === 'offline' || workEnvironment === undefined;
+        
         setUserDetails({
           username: currentUser.username,
           walletAddress: walletAddress,
           role: currentUser.role,
           active: currentUser.active !== undefined ? currentUser.active : true,
-          registeredAt: registeredAt ? new Date(registeredAt).toLocaleDateString() : new Date().toLocaleDateString(),
+          registeredAt: registeredAtFormatted,
           isOnchain: blockchainData ? true : false,
-          isDevelopmentMode: !blockchainData,
+          isDevelopmentMode: isDev,
           blockchainData: blockchainData,
         });
       }
@@ -131,22 +189,39 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
           const receipt = await tx.wait();
           console.log('✅ Wallet desvinculada en blockchain');
           console.log('   - TX Hash:', receipt.hash);
-          setSuccess('✅ Wallet desvinculada de blockchain');
+          setSuccess('Wallet desvinculada de blockchain');
+          
+          // Actualizar currentUser en localStorage
+          const updatedUser = { ...currentUser, walletAddress: null, needsWalletBinding: true };
+          localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+          localStorage.removeItem('walletAddress');
+          
+          // Recargar detalles desde blockchain después de desvinculación
+          console.log('🔄 Recargando detalles del usuario desde blockchain...');
+          await new Promise(resolve => setTimeout(resolve, 1500)); // Esperar a que Anvil procese completamente
+          await loadUserDetails();
+          
+          // Recargar la página para mostrar la información actualizada
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+          
+          setShowWalletBinder(false);
         } catch (err) {
           console.warn('⚠️ Error desvinculando en blockchain:', err.message);
           setError('Error al desvinacular en blockchain: ' + err.message);
           setLoading(false);
           return;
         }
+      } else {
+        // Modo offline - solo actualizar localStorage
+        const updatedUser = { ...currentUser, walletAddress: null, needsWalletBinding: true };
+        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        localStorage.removeItem('walletAddress');
+
+        setUserDetails({ ...userDetails, walletAddress: null, isOnchain: false });
+        setShowWalletBinder(false);
       }
-
-      // Actualizar usuario removiendo wallet localmente
-      const updatedUser = { ...currentUser, walletAddress: null, needsWalletBinding: true };
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-      localStorage.removeItem('walletAddress');
-
-      setUserDetails({ ...userDetails, walletAddress: null, isOnchain: false });
-      setShowWalletBinder(true);
 
       setLoading(false);
     } catch (err) {
@@ -280,8 +355,12 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
           );
           
           console.log('⏳ Esperando confirmación de transacción...');
-          await tx.wait();
+          const receipt = await tx.wait();
           console.log('✅ Wallet vinculada exitosamente en blockchain');
+          console.log('   - TX Hash:', receipt.hash);
+          
+          // Esperar a que Anvil procese completamente la transacción
+          await new Promise(resolve => setTimeout(resolve, 1500));
           
         } catch (blockchainError) {
           // Si hay error en blockchain, NO guardar wallet localmente
@@ -294,13 +373,13 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
             console.warn('⚠️ El usuario está inactivo en blockchain');
           } else if (errorMsg.includes('user rejected') || errorMsg.includes('denied')) {
             // Usuario canceló en MetaMask
-            setError('❌ Operación cancelada por el usuario');
+            setError('Operación cancelada por el usuario');
             setBindingLoading(false);
             return; // SALIR SIN GUARDAR LA WALLET
           } else {
             // Otro error
             console.error('❌ Error en blockchain:', blockchainError.message);
-            setError(`❌ Error al vincular en blockchain: ${blockchainError.message}`);
+            setError(`Error al vincular en blockchain: ${blockchainError.message}`);
             setBindingLoading(false);
             return; // SALIR SIN GUARDAR LA WALLET
           }
@@ -342,13 +421,18 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
 
       setShowWalletSelector(false);
       setAvailableWallets([]);
-      setSuccess('✅ Wallet vinculada correctamente');
+      setSuccess('Wallet vinculada correctamente');
       
       // Limpiar mensaje de éxito después de 3 segundos
       setTimeout(() => setSuccess(''), 3000);
       
-      // Recargar detalles del usuario
+      // Recargar detalles del usuario y refrescar la página
       await loadUserDetails();
+      
+      // Recargar la página para mostrar la información actualizada
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
       
       console.log('=== ✅ VINCULACIÓN COMPLETADA ===');
       setBindingLoading(false);
@@ -403,7 +487,7 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       });
       localStorage.setItem('allUsers', JSON.stringify(updatedUsers));
 
-      setSuccess('✅ Contraseña cambiada correctamente');
+      setSuccess('Contraseña cambiada correctamente');
       setPasswordForm({ current: '', new: '', confirm: '' });
       setShowPasswordChange(false);
       
@@ -567,12 +651,6 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
         <div className="profile-section">
           <h3>🔐 Información de Wallet</h3>
           
-          {userDetails?.isOnchain && (
-            <div style={{ padding: '10px', backgroundColor: '#d1fae5', borderRadius: '6px', borderLeft: '4px solid #10b981', marginBottom: '10px', fontSize: '12px', color: '#065f46' }}>
-              ✅ Datos recuperados de la blockchain
-            </div>
-          )}
-          
           {!showWalletBinder && userDetails?.walletAddress ? (
             <>
               <div className="profile-item">
@@ -592,14 +670,6 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
               </div>
 
               <div style={{ marginTop: '10px', display: 'flex', gap: '10px' }}>
-                <button
-                  onClick={() => setShowWalletBinder(true)}
-                  disabled={loading}
-                  className="btn-primary"
-                  style={{ flex: 1 }}
-                >
-                  🔄 Cambiar Wallet
-                </button>
                 <button
                   onClick={handleUnlinkWallet}
                   disabled={loading}
@@ -699,24 +769,47 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
 
         {userDetails.isOnchain && !userDetails.isDevelopmentMode && (
           <div className="profile-section alert alert-info">
-            ✅ Este perfil está sincronizado con la blockchain
+            Este perfil está sincronizado con la blockchain
           </div>
         )}
 
         {userDetails.isDevelopmentMode && (
           <div className="profile-section alert alert-info">
-            ℹ️ Modo desarrollo - Perfil almacenado localmente
+            Modo desarrollo - Perfil almacenado localmente
+          </div>
+        )}
+
+        {!userDetails.isDevelopmentMode && !userDetails.isOnchain && (
+          <div className="profile-section alert alert-success">
+            Modo Producción - Operando en blockchain
           </div>
         )}
       </div>
 
       <div className="profile-help">
-        <h3>ℹ️ Información Importante</h3>
+        <h3>Información Importante</h3>
         <ul>
-          <li>Tu wallet está vinculada a tu cuenta de usuario</li>
-          <li>El rol determina qué acciones puedes realizar en el sistema</li>
-          <li>Contacta al administrador si necesitas cambiar tu rol</li>
-          <li>Mantén segura tu frase de recuperación de MetaMask</li>
+          {userDetails?.walletAddress ? (
+            <>
+              <li>Tu wallet <strong>{userDetails.walletAddress.slice(0, 6)}...{userDetails.walletAddress.slice(-4)}</strong> está vinculada</li>
+              <li>El rol determina qué acciones puedes realizar en el sistema</li>
+              <li>Puedes desvinculación tu wallet en cualquier momento</li>
+              <li>Mantén segura tu frase de recuperación de MetaMask</li>
+            </>
+          ) : (
+            <>
+              <li>⚠️ No tienes wallet vinculada a tu cuenta</li>
+              <li>Vincula una wallet para acceder a todas las funcionalidades</li>
+              <li>El rol determina qué acciones puedes realizar en el sistema</li>
+              <li>Contacta al administrador si necesitas cambiar tu rol</li>
+            </>
+          )}
+          {userDetails?.isDevelopmentMode && (
+            <li style={{color: '#ff9800', marginTop: '10px'}}>ℹ️ Estás en Modo Desarrollo - las transacciones son locales</li>
+          )}
+          {!userDetails?.isDevelopmentMode && (
+            <li style={{color: '#4caf50', marginTop: '10px'}}>Estás en Modo Producción - conectado a blockchain</li>
+          )}
         </ul>
       </div>
     </div>

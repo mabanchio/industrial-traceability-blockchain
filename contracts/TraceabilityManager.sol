@@ -61,6 +61,9 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
     // User data structure: username => User
     mapping(string => User) private users;
     
+    // Array para trackear todos los usernames registrados
+    string[] private allUsernames;
+    
     // Quick lookup: wallet address => username
     mapping(address => string) private walletToUsername;
     
@@ -125,6 +128,7 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
         });
 
         roleUsers[role].push(msg.sender);
+        allUsernames.push(username);
         emit UserRegistered(username, role, block.timestamp);
     }
 
@@ -152,6 +156,7 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
             user.registeredAt = block.timestamp;
             user.activeWallet = address(0);
             roleUsers[role].push(msg.sender);
+            allUsernames.push(username);
             emit UserRegistered(username, role, block.timestamp);
         }
 
@@ -195,6 +200,9 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
         require(user.activeWallet == msg.sender, "Wallet not active for this user");
 
         _deactivateWallet(username, msg.sender);
+        
+        // Resetear activeWallet después de desvinculación
+        user.activeWallet = address(0);
 
         // Activar la siguiente wallet si existe
         for (uint256 i = 0; i < user.wallets.length; i++) {
@@ -478,6 +486,27 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
         string memory username = walletToUsername[walletAddress];
         require(bytes(username).length > 0, "Wallet not found");
         return users[username];
+    }
+
+    /**
+     * Obtiene la lista de todos los usernames registrados
+     */
+    function getAllUsernames() external view returns (string[] memory) {
+        return allUsernames;
+    }
+
+    /**
+     * Obtiene todos los usuarios con sus datos completos
+     * NOTA: Esta función puede ser costosa en gas si hay muchos usuarios
+     */
+    function getAllUsers() external view returns (User[] memory) {
+        User[] memory result = new User[](allUsernames.length);
+        
+        for (uint256 i = 0; i < allUsernames.length; i++) {
+            result[i] = users[allUsernames[i]];
+        }
+        
+        return result;
     }
 
     function registerAsset(

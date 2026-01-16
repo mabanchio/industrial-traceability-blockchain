@@ -14,6 +14,7 @@ export default function AdminPanel({ contract, provider, currentUser }) {
   const [workEnvironment, setWorkEnvironment] = useState('offline');
   const [rpcUrl, setRpcUrl] = useState('');
   const [showEnvironmentConfig, setShowEnvironmentConfig] = useState(false);
+  const [blockchainWallets, setBlockchainWallets] = useState({});
 
   const roles = ['CERTIFIER', 'ASSET_CREATOR', 'AUDITOR', 'MANUFACTURER', 'DISTRIBUTOR'];
   
@@ -31,8 +32,96 @@ export default function AdminPanel({ contract, provider, currentUser }) {
     loadConfig();
   }, []);
 
-  const loadUsers = () => {
+  // Cargar wallets activas del blockchain
+  useEffect(() => {
+    if (workEnvironment !== 'offline' && contractAddress && users.length > 0) {
+      loadBlockchainWallets();
+    }
+  }, [contractAddress, workEnvironment, users]);
+
+  const loadBlockchainWallets = async () => {
     try {
+      let provider;
+      
+      if (window.ethereum) {
+        provider = new ethers.BrowserProvider(window.ethereum);
+      } else if (rpcUrl) {
+        provider = new ethers.JsonRpcProvider(rpcUrl);
+      } else {
+        provider = new ethers.JsonRpcProvider('http://localhost:8545');
+      }
+      
+      const { CONTRACT_ABI } = await import('../config/abi.js');
+      const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
+      
+      const wallets = {};
+      
+      // Cargar wallet activa de cada usuario
+      for (const user of users) {
+        try {
+          const activeWallet = await contract.getActiveWallet(user.username);
+          wallets[user.username] = activeWallet === ethers.ZeroAddress ? null : activeWallet;
+        } catch (err) {
+          // Usuario no existe en blockchain
+          wallets[user.username] = null;
+        }
+      }
+      
+      setBlockchainWallets(wallets);
+      console.log('✅ Wallets del blockchain cargadas:', wallets);
+    } catch (err) {
+      console.warn('⚠️ No se pudieron cargar wallets del blockchain:', err.message);
+      setBlockchainWallets({});
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const workEnvironment = localStorage.getItem('workEnvironment');
+      const contractAddress = localStorage.getItem('contractAddress') || '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+      
+      // Si está en modo blockchain, cargar usuarios del contrato
+      if (workEnvironment && workEnvironment !== 'offline' && contractAddress) {
+        try {
+          console.log('🔗 Cargando usuarios del blockchain...');
+          
+          let provider;
+          const rpcUrl = localStorage.getItem('rpcUrl');
+          
+          if (window.ethereum) {
+            provider = new ethers.BrowserProvider(window.ethereum);
+          } else if (rpcUrl) {
+            provider = new ethers.JsonRpcProvider(rpcUrl);
+          } else {
+            provider = new ethers.JsonRpcProvider('http://localhost:8545');
+          }
+          
+          const { CONTRACT_ABI } = await import('../config/abi.js');
+          const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
+          
+          // Obtener todos los usuarios del blockchain
+          const blockchainUsers = await contract.getAllUsers();
+          
+          // Convertir a formato de la aplicación
+          const formattedUsers = blockchainUsers.map(user => ({
+            username: user.username,
+            role: user.role,
+            active: user.active,
+            walletAddress: user.activeWallet === ethers.ZeroAddress ? null : user.activeWallet,
+            registeredAt: new Date(Number(user.registeredAt) * 1000).toISOString(),
+            isOnchain: true
+          }));
+          
+          console.log('✅ Usuarios del blockchain cargados:', formattedUsers.length);
+          setUsers(formattedUsers);
+          return;
+        } catch (err) {
+          console.warn('⚠️ Error cargando usuarios del blockchain:', err.message);
+          console.warn('   Fallback a localStorage');
+        }
+      }
+      
+      // Fallback a localStorage si está offline o si hay error en blockchain
       const savedUsers = localStorage.getItem('allUsers');
       if (savedUsers) {
         setUsers(JSON.parse(savedUsers));
@@ -44,7 +133,8 @@ export default function AdminPanel({ contract, provider, currentUser }) {
 
   const loadConfig = () => {
     try {
-      const savedContractAddress = localStorage.getItem('contractAddress') || '';
+      const DEFAULT_CONTRACT_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+      const savedContractAddress = localStorage.getItem('contractAddress') || DEFAULT_CONTRACT_ADDRESS;
       const savedNetworkName = localStorage.getItem('networkName') || '';
       const savedEnvironment = localStorage.getItem('workEnvironment') || 'offline';
       const savedRpcUrl = localStorage.getItem('rpcUrl') || '';
@@ -143,6 +233,11 @@ export default function AdminPanel({ contract, provider, currentUser }) {
       setTimeout(() => setSuccess(''), 3000);
       
       setLoading(false);
+      
+      // Recargar la página para aplicar cambios y refrescar datos del blockchain
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
     } catch (err) {
       setError(err.message || 'Error al guardar configuración');
       setLoading(false);
@@ -696,22 +791,35 @@ export default function AdminPanel({ contract, provider, currentUser }) {
                   <tr key={user.username} style={{ opacity: !user.active ? 0.6 : 1 }}>
                     <td>{user.username}</td>
                     <td className="wallet-cell">
-                      {user.walletAddress ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span title={user.walletAddress}>
-                            ✅ {user.walletAddress.slice(0, 10)}...{user.walletAddress.slice(-8)}
-                          </span>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(user.walletAddress);
-                              alert('Wallet copiada al portapapeles');
-                            }}
-                            className="btn-small"
-                            title="Copiar wallet"
-                            style={{ padding: '2px 6px', fontSize: '11px' }}
-                          >
-                            📋
-                          </button>
+                      {blockchainWallets[user.username] || user.walletAddress ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexDirection: 'column', alignItems: 'flex-start' }}>
+                          {blockchainWallets[user.username] && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                              <span style={{ fontSize: '10px', backgroundColor: '#ecfdf5', padding: '2px 6px', borderRadius: '3px', color: '#10b981' }}>ACTIVA</span>
+                              <span title={blockchainWallets[user.username]}>
+                                ⛓️ {blockchainWallets[user.username].slice(0, 10)}...{blockchainWallets[user.username].slice(-8)}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(blockchainWallets[user.username]);
+                                  alert('Wallet copiada al portapapeles');
+                                }}
+                                className="btn-small"
+                                title="Copiar wallet"
+                                style={{ padding: '2px 6px', fontSize: '11px' }}
+                              >
+                                📋
+                              </button>
+                            </div>
+                          )}
+                          {user.walletAddress && user.walletAddress !== blockchainWallets[user.username] && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', opacity: 0.6 }}>
+                              <span style={{ fontSize: '10px', backgroundColor: '#fef3c7', padding: '2px 6px', borderRadius: '3px', color: '#ca8a04' }}>LOCAL</span>
+                              <span title={user.walletAddress}>
+                                💾 {user.walletAddress.slice(0, 10)}...{user.walletAddress.slice(-8)}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <span style={{ color: '#9ca3af' }}>❌ Sin vincular</span>
@@ -732,7 +840,25 @@ export default function AdminPanel({ contract, provider, currentUser }) {
                         {user.active ? '✅ Activo' : '❌ Inactivo'}
                       </span>
                     </td>
-                    <td>{new Date(user.registeredAt).toLocaleDateString()}</td>
+                    <td>
+                      {(() => {
+                        const formatearFecha = (dateString) => {
+                          try {
+                            const date = new Date(dateString);
+                            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                            const dia = date.getDate();
+                            const mes = meses[date.getMonth()];
+                            const año = date.getFullYear();
+                            const horas = String(date.getHours()).padStart(2, '0');
+                            const minutos = String(date.getMinutes()).padStart(2, '0');
+                            return `${dia} ${mes} ${año} ${horas}:${minutos}`;
+                          } catch (err) {
+                            return dateString;
+                          }
+                        };
+                        return formatearFecha(user.registeredAt);
+                      })()}
+                    </td>
                     <td className="actions-cell">
                       <select
                         value={user.role}
