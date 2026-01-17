@@ -281,10 +281,20 @@ export default function AdminPanel({ contract, provider, currentUser }) {
           const blockchainContract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
           
           // Llamar a registerUser con username y role (sin wallet)
-          const tx = await blockchainContract.registerUser(newUser.username, newUser.role);
+          let tx = await blockchainContract.registerUser(newUser.username, newUser.role);
           await tx.wait();
           console.log('✅ Usuario registrado en blockchain');
-          setSuccess(`Usuario ${newUser.username} registrado en blockchain`);
+          
+          // Establecer contraseña en blockchain
+          console.log('🔐 Estableciendo contraseña en blockchain...');
+          tx = await blockchainContract.setPassword(newUser.username, newUser.password);
+          await tx.wait();
+          console.log('✅ Contraseña establecida en blockchain');
+          
+          // Esperar a que blockchain procese completamente
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          
+          setSuccess(`Usuario ${newUser.username} registrado en blockchain con contraseña`);
         } catch (blockchainError) {
           console.warn('⚠️ Error registrando en blockchain:', blockchainError.message);
           setError(`Blockchain: ${blockchainError.message}`);

@@ -1,5 +1,5 @@
 // Auto-generated ABI file - DO NOT EDIT MANUALLY
-// Generated on: 2026-01-16T15:10:05.241Z
+// Generated on: 2026-01-17T01:33:29.025Z
 
 export const CONTRACT_ABI = [
   {
@@ -83,6 +83,29 @@ export const CONTRACT_ABI = [
       },
       {
         "name": "newRole",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "changePassword",
+    "inputs": [
+      {
+        "name": "username",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "currentPassword",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "newPassword",
         "type": "string",
         "internalType": "string"
       }
@@ -900,6 +923,24 @@ export const CONTRACT_ABI = [
   },
   {
     "type": "function",
+    "name": "setPassword",
+    "inputs": [
+      {
+        "name": "username",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "newPassword",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "supportsInterface",
     "inputs": [
       {
@@ -936,6 +977,30 @@ export const CONTRACT_ABI = [
     "inputs": [
       {
         "name": "username",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "verifyPassword",
+    "inputs": [
+      {
+        "name": "username",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "password",
         "type": "string",
         "internalType": "string"
       }

@@ -464,37 +464,112 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       setPasswordLoading(true);
       setError('');
 
-      // Verificar contraseña actual
-      const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '{}');
-      if (!systemUsers[currentUser.username] || systemUsers[currentUser.username].password !== passwordForm.current) {
-        setError('Contraseña actual incorrecta');
-        setPasswordLoading(false);
-        return;
-      }
+      const workEnvironment = localStorage.getItem('workEnvironment');
+      const contractAddress = localStorage.getItem('contractAddress');
 
-      // Actualizar contraseña en systemUsers
-      systemUsers[currentUser.username].password = passwordForm.new;
-      localStorage.setItem('systemUsers', JSON.stringify(systemUsers));
+      // Si está en modo blockchain, cambiar contraseña en blockchain
+      if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
+        try {
+          console.log('🔗 Cambiando contraseña en blockchain...');
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await provider.getSigner();
+          const { CONTRACT_ABI } = await import('../config/abi.js');
+          const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
 
-      // Actualizar en allUsers también
-      const allUsersStr = localStorage.getItem('allUsers') || '[]';
-      const allUsers = JSON.parse(allUsersStr);
-      const updatedUsers = allUsers.map(u => {
-        if (u.username === currentUser.username) {
-          return { ...u, password: passwordForm.new };
+          // Llamar a changePassword en blockchain
+          console.log('⏳ Enviando transacción al blockchain...');
+          const tx = await contract.changePassword(
+            currentUser.username,
+            passwordForm.current,
+            passwordForm.new
+          );
+          
+          console.log('⏳ Esperando confirmación de transacción...');
+          const receipt = await tx.wait();
+          console.log('✅ Contraseña cambiada en blockchain');
+          console.log('   - TX Hash:', receipt.hash);
+          
+          // Esperar a que blockchain procese completamente
+          await new Promise(resolve => setTimeout(resolve, 1500));
+
+          // Actualizar también en localStorage para sincronización
+          const allUsersStr = localStorage.getItem('allUsers') || '[]';
+          const allUsers = JSON.parse(allUsersStr);
+          const updatedUsers = allUsers.map(u => {
+            if (u.username === currentUser.username) {
+              return { ...u, password: passwordForm.new };
+            }
+            return u;
+          });
+          localStorage.setItem('allUsers', JSON.stringify(updatedUsers));
+
+          const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '{}');
+          if (systemUsers[currentUser.username]) {
+            systemUsers[currentUser.username].password = passwordForm.new;
+            localStorage.setItem('systemUsers', JSON.stringify(systemUsers));
+          }
+
+          setSuccess('Contraseña cambiada correctamente');
+          setPasswordForm({ current: '', new: '', confirm: '' });
+          setShowPasswordChange(false);
+          
+          setTimeout(() => setSuccess(''), 3000);
+          setPasswordLoading(false);
+          
+        } catch (blockchainError) {
+          console.warn('⚠️ Error en blockchain:', blockchainError.message);
+          
+          // Fallback a localStorage si hay error en blockchain
+          if (blockchainError.message.includes('Incorrect current password')) {
+            setError('Contraseña actual incorrecta');
+          } else {
+            setError('Error al cambiar contraseña en blockchain. ' + blockchainError.message);
+          }
+          setPasswordLoading(false);
+          return;
         }
-        return u;
-      });
-      localStorage.setItem('allUsers', JSON.stringify(updatedUsers));
+      } else {
+        // Modo offline: usar localStorage
+        const allUsersStr = localStorage.getItem('allUsers') || '[]';
+        const allUsers = JSON.parse(allUsersStr);
+        const currentUserData = allUsers.find(u => u.username === currentUser.username);
+        
+        console.log('💾 Modo offline - Cambiando contraseña en localStorage');
+        
+        if (!currentUserData || currentUserData.password !== passwordForm.current) {
+          console.error('❌ Contraseña incorrecta');
+          setError('Contraseña actual incorrecta');
+          setPasswordLoading(false);
+          return;
+        }
 
-      setSuccess('Contraseña cambiada correctamente');
-      setPasswordForm({ current: '', new: '', confirm: '' });
-      setShowPasswordChange(false);
+        // Actualizar contraseña en allUsers
+        const updatedUsers = allUsers.map(u => {
+          if (u.username === currentUser.username) {
+            console.log('✅ Actualizando contraseña para:', u.username);
+            return { ...u, password: passwordForm.new };
+          }
+          return u;
+        });
+        localStorage.setItem('allUsers', JSON.stringify(updatedUsers));
+
+        // También actualizar en systemUsers
+        const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '{}');
+        if (systemUsers[currentUser.username]) {
+          systemUsers[currentUser.username].password = passwordForm.new;
+          localStorage.setItem('systemUsers', JSON.stringify(systemUsers));
+        }
+
+        setSuccess('Contraseña cambiada correctamente');
+        setPasswordForm({ current: '', new: '', confirm: '' });
+        setShowPasswordChange(false);
+        
+        setTimeout(() => setSuccess(''), 3000);
+        setPasswordLoading(false);
+      }
       
-      setTimeout(() => setSuccess(''), 3000);
-      setPasswordLoading(false);
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Error en handleChangePassword:', err);
       setError(`Error: ${err.message}`);
       setPasswordLoading(false);
     }

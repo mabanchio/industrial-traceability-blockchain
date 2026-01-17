@@ -140,10 +140,12 @@ export default function Dashboard({ provider, signer, contractAddress, blockchai
         <div className="info-item">
           <h3>⚡ Optimizaciones</h3>
           <ul style={{ fontSize: '13px' }}>
-            <li>💾 Storage packing eficiente</li>
-            <li>🔢 Math optimizado (unchecked)</li>
-            <li>📇 Indexación de eventos</li>
-            <li>💰 Gas optimizado (Solidity ^0.8.24)</li>
+            <li>✅ Indexación de eventos (indexed parameters)</li>
+            <li>✅ Gas optimizado (Solidity ^0.8.24)</li>
+            <li>✅ ReentrancyGuard para transacciones seguras</li>
+            <li>✅ Access Control (Roles y Permisos)</li>
+            <li>📋 Storage packing en roadmap</li>
+            <li>📋 Math optimizado (unchecked) en roadmap</li>
           </ul>
         </div>
       </div>

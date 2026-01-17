@@ -70,6 +70,9 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
     // Wallet details: walletAddress => WalletInfo
     mapping(address => WalletInfo) private walletInfo;
     
+    // Contraseñas hasheadas: username => keccak256(password)
+    mapping(string => bytes32) private passwordHashes;
+    
     mapping(string => address[]) private roleUsers;
 
     // ═══════════════════════════════════════════════════════════════
@@ -301,6 +304,58 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
 
         user.active = true;
         emit UserActivated(username, block.timestamp);
+    }
+
+    /**
+     * Establece la contraseña de un usuario (solo admin)
+     * La contraseña se almacena como hash keccak256
+     */
+    function setPassword(string calldata username, string calldata newPassword) 
+        external 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
+    {
+        require(bytes(username).length > 0, "Invalid username");
+        require(bytes(newPassword).length >= 4, "Password too short");
+        
+        User storage user = users[username];
+        require(user.registeredAt != 0, "User not found");
+        
+        passwordHashes[username] = keccak256(abi.encodePacked(newPassword));
+    }
+
+    /**
+     * Cambia la contraseña del usuario actual
+     * El usuario debe saber su contraseña actual
+     */
+    function changePassword(string calldata username, string calldata currentPassword, string calldata newPassword) 
+        external 
+    {
+        require(bytes(username).length > 0, "Invalid username");
+        require(bytes(newPassword).length >= 4, "Password too short");
+        require(bytes(currentPassword).length > 0, "Current password required");
+        
+        User storage user = users[username];
+        require(user.registeredAt != 0, "User not found");
+        
+        // Verificar contraseña actual
+        require(
+            passwordHashes[username] == keccak256(abi.encodePacked(currentPassword)),
+            "Incorrect current password"
+        );
+        
+        // Actualizar a nueva contraseña
+        passwordHashes[username] = keccak256(abi.encodePacked(newPassword));
+    }
+
+    /**
+     * Verifica si una contraseña es correcta para un usuario
+     */
+    function verifyPassword(string calldata username, string calldata password) 
+        external 
+        view 
+        returns (bool) 
+    {
+        return passwordHashes[username] == keccak256(abi.encodePacked(password));
     }
 
     // ═══════════════════════════════════════════════════════════════
