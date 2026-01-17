@@ -6,6 +6,7 @@ import UserProfile from './components/UserProfile';
 import AssetManager from './components/AssetManager';
 import CertificateManager from './components/CertificateManager';
 import Dashboard from './components/Dashboard';
+import AuditorPanel from './components/AuditorPanel';
 import { CONTRACT_ABI } from './config/abi';
 import './App.css';
 
@@ -49,19 +50,35 @@ export default function App() {
       
       setContractAddress(savedContractAddress);
       
+      // NO restaurar automáticamente - solo verificar que currentUser sea válido si existe
       const savedUser = localStorage.getItem('currentUser');
       
       if (savedUser) {
-        const user = JSON.parse(savedUser);
-        setCurrentUser(user);
-        
-        // Todos los usuarios ven el dashboard al loguearse
-        setActiveTab('dashboard');
-        
-        // Intentar conectar a blockchain si el usuario usó MetaMask
-        if (user.isMetaMaskUser) {
-          initializeWeb3(savedContractAddress);
-        } else {
+        try {
+          const user = JSON.parse(savedUser);
+          // Validar que el usuario tenga propiedades necesarias
+          if (user.username && user.role) {
+            setCurrentUser(user);
+            // Todos los usuarios ven el dashboard al loguearse
+            setActiveTab('dashboard');
+            
+            // Intentar conectar a blockchain si el usuario usó MetaMask
+            if (user.isMetaMaskUser) {
+              initializeWeb3(savedContractAddress);
+            } else {
+              setIsLoading(false);
+            }
+          } else {
+            // Usuario inválido, limpiar
+            localStorage.removeItem('currentUser');
+            localStorage.removeItem('walletAddress');
+            setIsLoading(false);
+          }
+        } catch (parseErr) {
+          // Error parseando JSON, limpiar
+          console.warn('Error parseando currentUser:', parseErr);
+          localStorage.removeItem('currentUser');
+          localStorage.removeItem('walletAddress');
           setIsLoading(false);
         }
       } else {
@@ -209,6 +226,8 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    console.log('🚪 Cerrando sesión...');
+    // Limpiar estado de React
     setCurrentUser(null);
     setAccount(null);
     setProvider(null);
@@ -216,6 +235,12 @@ export default function App() {
     setContract(null);
     setBlockchainConnected(false);
     setActiveTab('profile');
+    
+    // Limpiar localStorage
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('walletAddress');
+    
+    console.log('✅ Sesión cerrada');
   };
 
   // Pantalla de login
@@ -284,6 +309,14 @@ export default function App() {
             ✅ Certificaciones
           </button>
         )}
+        {currentUser?.role === 'AUDITOR' && (
+          <button 
+            className={`tab ${activeTab === 'auditor' ? 'active' : ''}`}
+            onClick={() => setActiveTab('auditor')}
+          >
+            🔍 Auditoría
+          </button>
+        )}
       </nav>
 
       <main className="container">
@@ -296,6 +329,7 @@ export default function App() {
         {activeTab === 'dashboard' && <Dashboard provider={provider} signer={signer} contractAddress={contractAddress} blockchainStatus={blockchainStatus} workEnvironment={workEnvironment} />}
         {activeTab === 'assets' && <AssetManager signer={signer} contractAddress={contractAddress} />}
         {activeTab === 'certificates' && <CertificateManager signer={signer} contractAddress={contractAddress} />}
+        {activeTab === 'auditor' && <AuditorPanel provider={provider} signer={signer} contractAddress={contractAddress} currentUser={currentUser} />}
       </main>
 
       <footer className="footer">

@@ -19,6 +19,18 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
     loadUserDetails();
   }, [currentUser, contract]);
 
+  useEffect(() => {
+    const handleStorageChange = () => {
+      loadUserDetails();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
   const loadUserDetails = async () => {
     try {
       setLoading(true);
@@ -177,36 +189,44 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       
       if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
         try {
-          console.log('📝 Desvinculando wallet en blockchain...');
           const provider = new ethers.BrowserProvider(window.ethereum);
           const signer = await provider.getSigner();
+          const signerAddress = await signer.getAddress();
           const { CONTRACT_ABI } = await import('../config/abi.js');
           const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
           
+          // Verificar que la wallet activa sea la que está firmando
+          if (userDetails.walletAddress && userDetails.walletAddress.toLowerCase() !== signerAddress.toLowerCase()) {
+            setError(`Debes desvincularte con la wallet ${userDetails.walletAddress}`);
+            setLoading(false);
+            return;
+          }
+          
           // Llamar a unlinkWallet en blockchain
           const tx = await contract.unlinkWallet(currentUser.username);
-          console.log('⏳ Esperando confirmación...');
           const receipt = await tx.wait();
-          console.log('✅ Wallet desvinculada en blockchain');
-          console.log('   - TX Hash:', receipt.hash);
-          setSuccess('Wallet desvinculada de blockchain');
           
           // Actualizar currentUser en localStorage
           const updatedUser = { ...currentUser, walletAddress: null, needsWalletBinding: true };
           localStorage.setItem('currentUser', JSON.stringify(updatedUser));
           localStorage.removeItem('walletAddress');
           
-          // Recargar detalles desde blockchain después de desvinculación
-          console.log('🔄 Recargando detalles del usuario desde blockchain...');
-          await new Promise(resolve => setTimeout(resolve, 1500)); // Esperar a que Anvil procese completamente
-          await loadUserDetails();
+          // Actualizar en allUsers también
+          const allUsersStr = localStorage.getItem('allUsers') || '[]';
+          const allUsers = JSON.parse(allUsersStr);
+          const updatedUsers = allUsers.map(u => {
+            if (u.username === currentUser.username) {
+              return { ...u, walletAddress: null };
+            }
+            return u;
+          });
+          localStorage.setItem('allUsers', JSON.stringify(updatedUsers));
           
-          // Recargar la página para mostrar la información actualizada
-          setTimeout(() => {
-            window.location.reload();
-          }, 1000);
-          
+          setSuccess('Wallet desvinculada correctamente');
           setShowWalletBinder(false);
+          
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          await loadUserDetails();
         } catch (err) {
           console.warn('⚠️ Error desvinculando en blockchain:', err.message);
           setError('Error al desvinacular en blockchain: ' + err.message);
@@ -328,38 +348,33 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       setBindingLoading(true);
       setError('');
 
-      console.log('🔗 Vinculando wallet:', walletAddress);
-
       const workEnvironment = localStorage.getItem('workEnvironment');
       const contractAddress = localStorage.getItem('contractAddress');
       
-      // Si estamos en modo blockchain, PRIMERO ejecutar la transacción
       if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
         try {
-          console.log('🔗 Ejecutando transacción en blockchain para vincular wallet');
           const provider = new ethers.BrowserProvider(window.ethereum);
           const signer = await provider.getSigner();
+          const currentSignerAddress = await signer.getAddress();
           
-          // Importar ABI dinámicamente
+          if (currentSignerAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+            setError(`Por favor selecciona la cuenta ${walletAddress} en Metamask y vuelve a intentar`);
+            setBindingLoading(false);
+            return;
+          }
+          
           const { CONTRACT_ABI } = await import('../config/abi.js');
           const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
           
-          // Obtener el rol del usuario
           const blockchainRole = currentUser.role === 'ADMIN' ? 'ASSET_CREATOR' : currentUser.role;
           
-          // IMPORTANTE: Ejecutar transacción ANTES de guardar localmente
-          console.log('⏳ Esperando confirmación de MetaMask...');
           const tx = await contract.linkWalletToUser(
             currentUser.username,
             blockchainRole
           );
           
-          console.log('⏳ Esperando confirmación de transacción...');
-          const receipt = await tx.wait();
-          console.log('✅ Wallet vinculada exitosamente en blockchain');
-          console.log('   - TX Hash:', receipt.hash);
+          await tx.wait();
           
-          // Esperar a que Anvil procese completamente la transacción
           await new Promise(resolve => setTimeout(resolve, 1500));
           
         } catch (blockchainError) {
@@ -426,13 +441,7 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
       // Limpiar mensaje de éxito después de 3 segundos
       setTimeout(() => setSuccess(''), 3000);
       
-      // Recargar detalles del usuario y refrescar la página
       await loadUserDetails();
-      
-      // Recargar la página para mostrar la información actualizada
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
       
       console.log('=== ✅ VINCULACIÓN COMPLETADA ===');
       setBindingLoading(false);
@@ -519,7 +528,45 @@ export default function UserProfile({ currentUser, contract, onLogout }) {
         } catch (blockchainError) {
           console.warn('⚠️ Error en blockchain:', blockchainError.message);
           
-          // Fallback a localStorage si hay error en blockchain
+          // Si el usuario no existe en blockchain, usar fallback a localStorage
+          if (blockchainError.message.includes('User not found')) {
+            console.log('ℹ️ Usuario no registrado en blockchain, usando localStorage...');
+            
+            // Cambiar en localStorage
+            const allUsersStr = localStorage.getItem('allUsers') || '[]';
+            const allUsers = JSON.parse(allUsersStr);
+            const currentUserData = allUsers.find(u => u.username === currentUser.username);
+            
+            if (!currentUserData || currentUserData.password !== passwordForm.current) {
+              setError('Contraseña actual incorrecta');
+              setPasswordLoading(false);
+              return;
+            }
+
+            const updatedUsers = allUsers.map(u => {
+              if (u.username === currentUser.username) {
+                return { ...u, password: passwordForm.new };
+              }
+              return u;
+            });
+            localStorage.setItem('allUsers', JSON.stringify(updatedUsers));
+
+            const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '{}');
+            if (systemUsers[currentUser.username]) {
+              systemUsers[currentUser.username].password = passwordForm.new;
+              localStorage.setItem('systemUsers', JSON.stringify(systemUsers));
+            }
+
+            setSuccess('Contraseña cambiada correctamente (almacenamiento local)');
+            setPasswordForm({ current: '', new: '', confirm: '' });
+            setShowPasswordChange(false);
+            
+            setTimeout(() => setSuccess(''), 3000);
+            setPasswordLoading(false);
+            return;
+          }
+          
+          // Si la contraseña es incorrecta
           if (blockchainError.message.includes('Incorrect current password')) {
             setError('Contraseña actual incorrecta');
           } else {

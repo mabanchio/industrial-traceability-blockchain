@@ -1,5 +1,5 @@
 // Auto-generated ABI file - DO NOT EDIT MANUALLY
-// Generated on: 2026-01-17T01:33:29.025Z
+// Generated on: 2026-01-17T01:42:51.316Z
 
 export const CONTRACT_ABI = [
   {

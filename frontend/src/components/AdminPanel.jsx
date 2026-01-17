@@ -15,8 +15,10 @@ export default function AdminPanel({ contract, provider, currentUser }) {
   const [rpcUrl, setRpcUrl] = useState('');
   const [showEnvironmentConfig, setShowEnvironmentConfig] = useState(false);
   const [blockchainWallets, setBlockchainWallets] = useState({});
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordChangeData, setPasswordChangeData] = useState({ username: '', newPassword: '' });
 
-  const roles = ['CERTIFIER', 'ASSET_CREATOR', 'AUDITOR', 'MANUFACTURER', 'DISTRIBUTOR'];
+  const roles = ['ADMIN', 'CERTIFIER', 'ASSET_CREATOR', 'AUDITOR', 'MANUFACTURER', 'DISTRIBUTOR'];
   
   const environments = [
     { id: 'offline', name: 'Modo Offline (Sin Blockchain)', color: '#ef4444' },
@@ -84,23 +86,30 @@ export default function AdminPanel({ contract, provider, currentUser }) {
       if (workEnvironment && workEnvironment !== 'offline' && contractAddress) {
         try {
           console.log('🔗 Cargando usuarios del blockchain...');
+          console.log('   Contract Address:', contractAddress);
+          console.log('   Work Environment:', workEnvironment);
           
           let provider;
           const rpcUrl = localStorage.getItem('rpcUrl');
           
           if (window.ethereum) {
             provider = new ethers.BrowserProvider(window.ethereum);
+            console.log('   Usando Metamask provider');
           } else if (rpcUrl) {
             provider = new ethers.JsonRpcProvider(rpcUrl);
+            console.log('   Usando RPC URL:', rpcUrl);
           } else {
             provider = new ethers.JsonRpcProvider('http://localhost:8545');
+            console.log('   Usando RPC default: http://localhost:8545');
           }
           
           const { CONTRACT_ABI } = await import('../config/abi.js');
           const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, provider);
           
+          console.log('   Llamando getAllUsers()...');
           // Obtener todos los usuarios del blockchain
           const blockchainUsers = await contract.getAllUsers();
+          console.log('   ✅ Response de getAllUsers():', blockchainUsers);
           
           // Convertir a formato de la aplicación
           const formattedUsers = blockchainUsers.map(user => ({
@@ -117,17 +126,38 @@ export default function AdminPanel({ contract, provider, currentUser }) {
           return;
         } catch (err) {
           console.warn('⚠️ Error cargando usuarios del blockchain:', err.message);
+          console.warn('   Error completo:', err);
           console.warn('   Fallback a localStorage');
         }
       }
       
       // Fallback a localStorage si está offline o si hay error en blockchain
+      console.log('📁 Cargando usuarios de localStorage...');
       const savedUsers = localStorage.getItem('allUsers');
       if (savedUsers) {
-        setUsers(JSON.parse(savedUsers));
+        const parsed = JSON.parse(savedUsers);
+        console.log('✅ Usuarios de localStorage:', parsed.length);
+        setUsers(parsed);
+      } else {
+        console.log('⚠️ Sin usuarios en localStorage');
+        setUsers([]);
       }
     } catch (err) {
       console.error('Error cargando usuarios:', err);
+      setUsers([]);
+    }
+  };
+
+  const clearLocalData = () => {
+    if (window.confirm('⚠️ ¿Deseas limpiar todos los datos locales del sistema? (usuarios, activos, certificados)\n\nEsto es útil después de reiniciar anvil')) {
+      localStorage.removeItem('allUsers');
+      localStorage.removeItem('systemUsers');
+      localStorage.removeItem('assets');
+      localStorage.removeItem('assetHistory');
+      setUsers([]);
+      setSuccess('✅ Datos locales eliminados. Se cargarán datos frescos del blockchain');
+      loadUsers();
+      setTimeout(() => setSuccess(''), 3000);
     }
   };
 
@@ -185,11 +215,6 @@ export default function AdminPanel({ contract, provider, currentUser }) {
       setSuccess('Entorno de trabajo configurado correctamente');
       setTimeout(() => setSuccess(''), 3000);
       
-      // Recargar la página para aplicar cambios
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
-      
       setLoading(false);
     } catch (err) {
       setError(err.message || 'Error al guardar entorno');
@@ -225,6 +250,14 @@ export default function AdminPanel({ contract, provider, currentUser }) {
       // Guardar configuración en localStorage
       localStorage.setItem('contractAddress', finalAddress);
       localStorage.setItem('networkName', networkName || 'Hardhat Localhost');
+      
+      // Si cambias a modo blockchain, limpiar usuarios locales para evitar conflictos
+      if (workEnvironment !== 'offline') {
+        console.log('🔄 Cambiando a modo blockchain: limpiando usuarios locales...');
+        localStorage.removeItem('allUsers');
+        localStorage.removeItem('systemUsers');
+        setUsers([]);
+      }
 
       // Actualizar estado con dirección guardada
       setContractAddress(finalAddress);
@@ -233,11 +266,6 @@ export default function AdminPanel({ contract, provider, currentUser }) {
       setTimeout(() => setSuccess(''), 3000);
       
       setLoading(false);
-      
-      // Recargar la página para aplicar cambios y refrescar datos del blockchain
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
     } catch (err) {
       setError(err.message || 'Error al guardar configuración');
       setLoading(false);
@@ -250,10 +278,8 @@ export default function AdminPanel({ contract, provider, currentUser }) {
       return;
     }
 
-    // Validar que el usuario no exista
-    const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '{}');
-    if (systemUsers[newUser.username]) {
-      setError('Este usuario ya existe');
+    if (newUser.password.length < 4) {
+      setError('La contraseña debe tener mínimo 4 caracteres');
       return;
     }
 
@@ -268,28 +294,69 @@ export default function AdminPanel({ contract, provider, currentUser }) {
       setError('');
       setSuccess('');
 
-      // Si hay contrato blockchain disponible, usar la blockchain
+      // Si hay contrato blockchain disponible, validar contra blockchain primero
       const workEnvironment = localStorage.getItem('workEnvironment');
       const contractAddress = localStorage.getItem('contractAddress');
+
+      if (workEnvironment !== 'offline' && contractAddress && contract) {
+        try {
+          // Verificar en blockchain si el usuario ya existe
+          const existingUser = await contract.getUserByUsername(newUser.username);
+          if (existingUser && existingUser.registeredAt && Number(existingUser.registeredAt) > 0) {
+            setError('Este usuario ya existe en blockchain');
+            setLoading(false);
+            return;
+          }
+        } catch (blockchainCheckError) {
+          // Si hay error al verificar en blockchain, continuar de todas formas
+          console.log('Verificación en blockchain inconclusa, continuando...');
+        }
+      }
+
+      // Validar contra la lista local de usuarios cargados
+      const userExists = users.some(u => u.username === newUser.username);
+      if (userExists) {
+        setError('Este usuario ya existe en la lista local');
+        setLoading(false);
+        return;
+      }
       
       if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
         try {
           console.log('🔗 Registrando usuario en blockchain:', newUser.username);
           const provider = new ethers.BrowserProvider(window.ethereum);
           const signer = await provider.getSigner();
+          const signerAddress = await signer.getAddress();
+          console.log('   Signer address:', signerAddress);
+          
           const { CONTRACT_ABI } = await import('../config/abi.js');
           const blockchainContract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
           
           // Llamar a registerUser con username y role (sin wallet)
+          console.log('   Ejecutando registerUser...');
           let tx = await blockchainContract.registerUser(newUser.username, newUser.role);
-          await tx.wait();
+          const receipt1 = await tx.wait();
           console.log('✅ Usuario registrado en blockchain');
+          console.log('   TX Hash:', receipt1.hash);
           
           // Establecer contraseña en blockchain
           console.log('🔐 Estableciendo contraseña en blockchain...');
-          tx = await blockchainContract.setPassword(newUser.username, newUser.password);
-          await tx.wait();
-          console.log('✅ Contraseña establecida en blockchain');
+          console.log('   Username:', newUser.username);
+          console.log('   Password:', '***' + newUser.password.substring(newUser.password.length - 2));
+          
+          try {
+            tx = await blockchainContract.setPassword(newUser.username, newUser.password);
+            const receipt2 = await tx.wait();
+            console.log('✅ Contraseña establecida en blockchain');
+            console.log('   TX Hash:', receipt2.hash);
+          } catch (pwErr) {
+            console.error('❌ Error estableciendo contraseña:', pwErr.message);
+            console.error('   Código de error:', pwErr.code);
+            console.error('   Datos:', pwErr.data);
+            setError(`Error estableciendo contraseña: ${pwErr.message}`);
+            setLoading(false);
+            return;
+          }
           
           // Esperar a que blockchain procese completamente
           await new Promise(resolve => setTimeout(resolve, 1500));
@@ -297,13 +364,15 @@ export default function AdminPanel({ contract, provider, currentUser }) {
           setSuccess(`Usuario ${newUser.username} registrado en blockchain con contraseña`);
         } catch (blockchainError) {
           console.warn('⚠️ Error registrando en blockchain:', blockchainError.message);
+          console.warn('   Código de error:', blockchainError.code);
+          console.warn('   Datos:', blockchainError.data);
           setError(`Blockchain: ${blockchainError.message}`);
         }
       }
 
       // Siempre guardar localmente - evitar duplicados
-      const userExists = users.some(u => u.username === newUser.username);
-      if (userExists) {
+      const userExistsLocal = users.some(u => u.username === newUser.username);
+      if (userExistsLocal) {
         setError('Este usuario ya existe en la lista local');
         setLoading(false);
         return;
@@ -324,10 +393,13 @@ export default function AdminPanel({ contract, provider, currentUser }) {
       setUsers(updatedUsers);
       localStorage.setItem('allUsers', JSON.stringify(updatedUsers));
 
-      // Guardar usuarios en el almacén de credenciales del sistema
-      const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '{}');
-      systemUsers[newUser.username] = { password: newUser.password, role: newUser.role, username: newUser.username };
-      localStorage.setItem('systemUsers', JSON.stringify(systemUsers));
+      // Solo guardar en systemUsers si estamos en modo offline
+      // En blockchain, el blockchain es la fuente de verdad
+      if (workEnvironment === 'offline') {
+        const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '{}');
+        systemUsers[newUser.username] = { password: newUser.password, role: newUser.role, username: newUser.username };
+        localStorage.setItem('systemUsers', JSON.stringify(systemUsers));
+      }
 
       setSuccess(`Usuario ${newUser.username} registrado correctamente con rol ${newUser.role}`);
       setNewUser({ username: '', password: '', walletAddress: '', role: 'AUDITOR' });
@@ -344,12 +416,37 @@ export default function AdminPanel({ contract, provider, currentUser }) {
       setError('');
       setSuccess('');
 
+      // Validar que el usuario admin no cambie su propio rol
+      if (currentUser?.username === username && currentUser?.role === 'ADMIN') {
+        setError('No puedes cambiar tu propio rol de ADMIN');
+        setLoading(false);
+        return;
+      }
+
       // Si hay contrato blockchain disponible, usar la blockchain
-      if (contract) {
-        const user = users.find(u => u.username === username);
-        if (user?.walletAddress) {
-          const tx = await contract.assignRole(user.walletAddress, newRole);
+      const workEnvironment = localStorage.getItem('workEnvironment');
+      const contractAddress = localStorage.getItem('contractAddress');
+      
+      if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
+        try {
+          console.log('🔗 Cambiando rol del usuario en blockchain:', username);
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await provider.getSigner();
+          const { CONTRACT_ABI } = await import('../config/abi.js');
+          const blockchainContract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
+          
+          const tx = await blockchainContract.assignRole(username, newRole);
           await tx.wait();
+          
+          // Esperar 1.5 segundos para que Anvil procese
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          
+          console.log('✅ Rol actualizado en blockchain');
+        } catch (blockchainError) {
+          console.warn('⚠️ Error actualizando rol en blockchain:', blockchainError.message);
+          setError(`Blockchain: ${blockchainError.message}`);
+          setLoading(false);
+          return;
         }
       }
 
@@ -372,6 +469,60 @@ export default function AdminPanel({ contract, provider, currentUser }) {
       setLoading(false);
     } catch (err) {
       setError(err.message || 'Error al asignar rol');
+      setLoading(false);
+    }
+  };
+
+  const handleChangePassword = async (username, newPassword) => {
+    if (!newPassword || newPassword.length < 4) {
+      setError('La contraseña debe tener mínimo 4 caracteres');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      setSuccess('');
+
+      const workEnvironment = localStorage.getItem('workEnvironment');
+      const contractAddress = localStorage.getItem('contractAddress');
+
+      // Si está en blockchain, cambiar en blockchain
+      if (workEnvironment !== 'offline' && contractAddress && window.ethereum) {
+        try {
+          console.log('🔐 Cambiando contraseña en blockchain:', username);
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await provider.getSigner();
+          const { CONTRACT_ABI } = await import('../config/abi.js');
+          const blockchainContract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
+          
+          const tx = await blockchainContract.setPassword(username, newPassword);
+          await tx.wait();
+          console.log('✅ Contraseña cambiada en blockchain');
+          
+          // Esperar a que procese
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        } catch (blockchainError) {
+          console.warn('⚠️ Error cambiando contraseña en blockchain:', blockchainError.message);
+          setError(`Error en blockchain: ${blockchainError.message}`);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Actualizar en localStorage también
+      const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '{}');
+      if (systemUsers[username]) {
+        systemUsers[username].password = newPassword;
+        localStorage.setItem('systemUsers', JSON.stringify(systemUsers));
+      }
+
+      setSuccess(`Contraseña actualizada para ${username}`);
+      setShowPasswordModal(false);
+      setPasswordChangeData({ username: '', newPassword: '' });
+      setLoading(false);
+    } catch (err) {
+      setError(err.message || 'Error al cambiar contraseña');
       setLoading(false);
     }
   };
@@ -693,6 +844,33 @@ export default function AdminPanel({ contract, provider, currentUser }) {
         )}
       </section>
 
+      {/* Sección: Limpiar Datos Locales */}
+      <section className="admin-section">
+        <h3>🗑️ Mantenimiento del Sistema</h3>
+        <div style={{ padding: '15px', backgroundColor: '#fef2f2', borderRadius: '8px', borderLeft: '4px solid #dc2626' }}>
+          <p style={{ marginTop: 0, fontSize: '14px', color: '#7f1d1d' }}>
+            <strong>Limpiar Datos Locales</strong><br/>
+            Elimina usuarios, activos y certificados del almacenamiento local. Útil después de reiniciar anvil para forzar sincronización con blockchain.
+          </p>
+          <button
+            onClick={clearLocalData}
+            disabled={loading}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#dc2626',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold',
+              opacity: loading ? 0.7 : 1
+            }}
+          >
+            🗑️ Limpiar Todos los Datos Locales
+          </button>
+        </div>
+      </section>
+
       {/* Sección: Registrar Nuevo Usuario */}
       <section className="admin-section">
         <h3>📝 Registrar Nuevo Usuario</h3>
@@ -882,6 +1060,17 @@ export default function AdminPanel({ contract, provider, currentUser }) {
                           </option>
                         ))}
                       </select>
+                      <button
+                        onClick={() => {
+                          setPasswordChangeData({ username: user.username, newPassword: '' });
+                          setShowPasswordModal(true);
+                        }}
+                        disabled={loading}
+                        className="btn-primary btn-small"
+                        title="Cambiar contraseña"
+                      >
+                        🔐 Contraseña
+                      </button>
                       {user.walletAddress && (
                         <button
                           onClick={() => handleUnlinkWallet(user.walletAddress, user.username)}
@@ -920,6 +1109,43 @@ export default function AdminPanel({ contract, provider, currentUser }) {
         <p className="info-text">
           Total de usuarios: <strong>{filteredUsers.length}</strong> (Activos: <strong>{filteredUsers.filter(u => u.active).length}</strong>)
         </p>
+
+        {/* Modal para cambiar contraseña */}
+        {showPasswordModal && (
+          <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <h3>Cambiar contraseña: {passwordChangeData.username}</h3>
+              
+              <div className="form-group">
+                <label>Nueva contraseña:</label>
+                <input
+                  type="password"
+                  value={passwordChangeData.newPassword}
+                  onChange={(e) => setPasswordChangeData({ ...passwordChangeData, newPassword: e.target.value })}
+                  className="input-field"
+                  placeholder="Mínimo 4 caracteres"
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setShowPasswordModal(false)}
+                  className="btn-secondary"
+                  disabled={loading}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => handleChangePassword(passwordChangeData.username, passwordChangeData.newPassword)}
+                  className="btn-primary"
+                  disabled={loading || !passwordChangeData.newPassword}
+                >
+                  {loading ? 'Actualizando...' : 'Actualizar contraseña'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
