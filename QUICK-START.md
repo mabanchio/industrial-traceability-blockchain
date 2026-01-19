@@ -27,13 +27,13 @@ npm run deploy
 
 ### Terminal 3: Iniciar Frontend
 ```bash
-./run-frontend.sh
+npm run frontend
 ```
-✅ Espera: `Local: http://127.0.0.1:3000/`
+✅ Espera: `Local: http://127.0.0.1:5173/` o `http://localhost:5173`
 
 ### Navegador: Acceder a la App
 ```
-http://localhost:3000
+http://localhost:5173
 ```
 
 ---
@@ -66,10 +66,10 @@ http://localhost:3000
 ## 🔄 Probar como Otro Usuario
 
 1. Abre una **pestaña incógnita**
-2. Ve a `http://localhost:3000`
+2. Ve a `http://localhost:5173`
 3. Conecta MetaMask con la wallet de Ana
 4. Ingresa: `Ana García`
-5. Verás solo la pestaña **✅ Certificaciones**
+5. Verás acceso según el rol asignado
 
 ---
 
@@ -77,30 +77,33 @@ http://localhost:3000
 
 ```
 TFM3/
-├── contracts/TraceabilityManager.sol  ← Smart contract
+├── contracts/TraceabilityManager.sol  ← Smart contract (700 líneas)
 ├── frontend/src/
 │   ├── components/
 │   │   ├── Login.jsx                  ← Login con MetaMask
-│   │   ├── AdminPanel.jsx             ← Panel admin
-│   │   └── UserProfile.jsx            ← Perfil usuario
+│   │   ├── AdminPanel.jsx             ← Panel administración
+│   │   ├── UserProfile.jsx            ← Gestión de perfil y wallets
+│   │   ├── AuditorPanel.jsx           ← Panel de auditoría
+│   │   ├── DistributorPanel.jsx       ← Panel de distribuidor
+│   │   ├── AssetManager.jsx           ← Gestión de activos
+│   │   └── CertificateManager.jsx     ← Gestión de certificaciones
 │   └── App.jsx                        ← Lógica principal
-├── USER-MANAGEMENT.md                 ← Guía completa
-├── ADMIN-SETUP.md                     ← Para administrador
-└── README.md                          ← Documentación
+├── QUICK-START.md                     ← Esta guía
+└── README.md                          ← Documentación completa
 ```
 
 ---
 
 ## 🎯 Roles Disponibles
 
-| Rol | Qué Ve |
-|-----|--------|
-| **ADMIN** | Todo + Panel de Administración |
-| **CERTIFIER** | Emitir certificaciones |
-| **ASSET_CREATOR** | Crear y gestionar activos |
-| **MANUFACTURER** | Activos + Certificaciones |
-| **AUDITOR** | Todo (solo lectura) |
-| **DISTRIBUTOR** | Activos (solo lectura) |
+| Rol | Descripción | Acceso |
+|-----|------------|--------|
+| **ADMIN** | Administrador del sistema | Todo + Panel Admin |
+| **CERTIFIER** | Emisor de certificaciones | Crear y gestionar certificados |
+| **ASSET_CREATOR** | Creador de activos | Crear y gestionar activos |
+| **MANUFACTURER** | Fabricante | Activos + Certificaciones |
+| **AUDITOR** | Auditor del sistema | Panel de auditoría (solo lectura) |
+| **DISTRIBUTOR** | Distribuidor | Panel de distribuidor (reportes y análisis) |
 
 ---
 
@@ -118,31 +121,52 @@ TFM3/
 
 ## 🧪 Funcionalidades Disponibles
 
-### ✅ Autenticación
+### ✅ Autenticación & Wallets
 - [x] Login con MetaMask
-- [x] Vinculación de wallet
+- [x] Vinculación de múltiples wallets
+- [x] Una wallet activa por usuario
+- [x] Auto-activación de siguiente wallet
+- [x] Detección de duplicados
 - [x] Persistencia de sesión
 - [x] Logout
 
 ### ✅ Gestión de Usuarios (Admin)
-- [x] Registrar usuarios
-- [x] Asignar roles
-- [x] Cambiar roles dinámicamente
-- [x] Desactivar usuarios
+- [x] Registrar usuarios en blockchain
+- [x] Asignar y cambiar roles dinámicamente
+- [x] Desactivar/activar usuarios
+- [x] Desvinculación de wallets por admin
 - [x] Filtrar por rol
+- [x] Gestión de contraseñas
 
-### ✅ Control de Acceso
-- [x] 6 roles diferentes
-- [x] Permisos específicos
-- [x] Tabs condicionales
+### ✅ Control de Acceso (RBAC)
+- [x] 6 roles con permisos específicos
 - [x] Validación en blockchain
+- [x] Tabs condicionales según rol
+- [x] Panel administrativo protegido
 
-### ✅ Interfaz
-- [x] Dashboard
-- [x] Gestor de activos
-- [x] Gestor de certificaciones
-- [x] Perfil de usuario
+### ✅ Gestión de Activos
+- [x] Registro de activos en blockchain
+- [x] Visualización filtrable
+- [x] Desactivación de activos
+- [x] Historial inmutable
+
+### ✅ Gestión de Certificaciones
+- [x] Emisión con fecha configurable
+- [x] Renovación de certificados
+- [x] Revocación inmediata
+- [x] Verificación de validez
+
+### ✅ Paneles Especializados
+- [x] Dashboard: Información del sistema
+- [x] AdminPanel: Gestión de usuarios y roles
+- [x] AuditorPanel: Auditoría con reportes
+- [x] DistributorPanel: Análisis de activos y certificaciones
+
+### ✅ Interfaz & UX
 - [x] Diseño responsive
+- [x] Alertas de estado
+- [x] Búsqueda y filtrado en tiempo real
+- [x] Exportación de reportes (JSON)
 
 ---
 
@@ -222,33 +246,31 @@ npx kill-port 3000
 
 ## 📚 Documentación Completa
 
-- **[README.md](README.md)** - Descripción general
-- **[USER-MANAGEMENT.md](USER-MANAGEMENT.md)** - Gestión de usuarios (350+ líneas)
-- **[ADMIN-SETUP.md](ADMIN-SETUP.md)** - Para administrador (240+ líneas)
-- **[README-TFM3.md](README-TFM3.md)** - Detalles técnicos
-- **[IA.md](IA.md)** - Retrospectiva de IA
+- **[README.md](README.md)** - Descripción general del proyecto
+- **[README.md - Sistema de Múltiples Wallets](README.md#-sistema-de-múltiples-wallets)** - Gestión de usuarios y wallets
+- **[README.md - Panel de Distribuidor](README.md#-panel-de-distribuidor-nuevo)** - Panel para distribuidores
+- **[README.md - Control de Acceso RBAC](README.md#-control-de-acceso-rbac)** - Roles y permisos
 
 ---
 
 ## 🎓 Tecnologías Utilizadas
 
-- **Frontend**: React 18, Vite, ethers.js, MetaMask
+- **Frontend**: React 18, Vite (puerto 5173), ethers.js, MetaMask
 - **Smart Contract**: Solidity ^0.8.24, Hardhat, OpenZeppelin
-- **Blockchain**: Ethereum (local con Hardhat)
+- **Blockchain**: Ethereum (local con Hardhat en puerto 8545)
+- **Testing**: Solidity tests con Foundry
 
 ---
 
 ## ✅ Estado del Proyecto
 
-- ✅ Smart Contract compilado y funcional
-- ✅ Frontend operativo en localhost:3000
+- ✅ Smart Contract compilado y funcional (700 líneas, 41 métodos)
+- ✅ Frontend operativo con React + Vite (9 componentes)
 - ✅ Autenticación con MetaMask integrada
-- ✅ Gestión de usuarios y roles completa
-- ✅ Documentación exhaustiva
-- ✅ Listo para demostración
+- ✅ Gestión de usuarios, wallets y roles (RBAC) completa
+- ✅ Panel para Distribuidores con reportes
+- ✅ Listo para demostración en producción
 
 ---
 
-**¿Preguntas?** Consulta [USER-MANAGEMENT.md](USER-MANAGEMENT.md) o [ADMIN-SETUP.md](ADMIN-SETUP.md)
-
-**Última actualización:** 14 de enero de 2026 | **Versión:** 2.0
+**Última actualización:** 19 de enero de 2026 | **Versión:** 3.0

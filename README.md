@@ -38,29 +38,40 @@ Esta plataforma proporciona una solución blockchain que garantiza autenticidad,
 ```
 TFM3/
 ├── contracts/
-│   └── TraceabilityManager.sol         # Smart contract (164 líneas)
+│   └── TraceabilityManager.sol         # Smart contract (700 líneas, 41 métodos)
 ├── test/
-│   └── TraceabilityManager.test.js     # Tests (375 líneas, 40+ casos)
+│   └── TraceabilityManager.t.sol       # Tests en Solidity (Foundry)
 ├── frontend/                            # Aplicación React + Vite
+│   ├── public/
+│   │   └── index.html
 │   ├── src/
 │   │   ├── main.jsx
 │   │   ├── App.jsx
+│   │   ├── App.css
+│   │   ├── index.css
 │   │   ├── components/
 │   │   │   ├── Dashboard.jsx
 │   │   │   ├── AssetManager.jsx
-│   │   │   └── CertificateManager.jsx
+│   │   │   ├── CertificateManager.jsx
+│   │   │   ├── AdminPanel.jsx
+│   │   │   ├── AuditorPanel.jsx
+│   │   │   ├── DistributorPanel.jsx
+│   │   │   ├── UserProfile.jsx
+│   │   │   ├── Login.jsx
+│   │   │   └── Alert.jsx
 │   │   └── config/
 │   │       └── abi.js
-│   ├── index.html
+│   ├── vite.config.js
 │   └── package.json
-├── docs/                                # Documentación
+├── scripts/
+│   ├── deploy.js
+│   ├── setup-users.js
+│   └── otros scripts de utilidad
 ├── hardhat.config.js
+├── foundry.toml
 ├── package.json
-├── IA.md                               # Retrospectiva de IA
 ├── QUICK-START.md                      # Guía rápida
-├── README-TFM3.md                      # Detalles técnicos
-└── run-frontend.sh                     # Script de deploy
-
+└── run-frontend.sh                     # Script para iniciar frontend
 ```
 
 ## 🚀 Inicio Rápido
@@ -156,12 +167,15 @@ Accede a **http://localhost:3000**
 ### Frontend
 
 #### Componentes React
-- Dashboard
-- AssetManager
-- CertificateManager
-- Login (con validación blockchain)
-- UserProfile (con gestión de wallets)
-- AdminPanel (con desvinculación blockchain)
+- **Dashboard**: Panel de información del sistema y estado de la red
+- **Login**: Autenticación con validación blockchain y registro de usuarios
+- **UserProfile**: Gestión de perfil de usuario y vinculación de múltiples wallets
+- **AdminPanel**: Panel administrativo para gestión de usuarios, roles y desvinculación de wallets
+- **AuditorPanel**: Panel de auditoría con vista de activos, certificados y generación de reportes
+- **DistributorPanel**: Panel para distribuidores con visualización de activos, certificados y reportes
+- **AssetManager**: Registro y gestión de activos industriales
+- **CertificateManager**: Emisión, renovación y revocación de certificaciones
+- **Alert**: Componente de alertas reutilizable
 
 #### Funcionalidades
 
@@ -286,30 +300,26 @@ Implementación de panel completo para el rol DISTRIBUTOR:
 
 ## 📚 Documentación Adicional
 
-- **[QUICK-START.md](./QUICK-START.md)** - Guía rápida de inicio
-- **[README-TFM3.md](./README-TFM3.md)** - Detalles técnicos y arquitectura
-- **[IA.md](./IA.md)** - Retrospectiva de uso de Inteligencia Artificial
+- **[QUICK-START.md](./QUICK-START.md)** - Guía rápida de inicio paso a paso
 
 ## 🤖 Uso de Inteligencia Artificial
 
-Este proyecto fue desarrollado con asistencia de IA. Consulta [IA.md](./IA.md) para:
-- Herramientas de IA utilizadas
-- Tiempo consumido (smart contract vs frontend)
-- Análisis de errores comunes
-- Referencias a sesiones de chat
+Este proyecto fue desarrollado con asistencia de IA (Claude). El desarrollo combinó:
+- Smart contract optimizado en Solidity
+- Frontend interactivo con React
+- Integración blockchain con ethers.js
+- Gestión de múltiples wallets y roles RBAC
 
 ## 📝 Scripts Disponibles
 
 | Script | Descripción |
 |--------|------------|
-| `npm run compile` | Compilar smart contract |
-| `npm test` | Ejecutar tests |
-| `npm run node` | Iniciar nodo Hardhat local |
-| `npm run deploy` | Desplegar contrato |
-| `npm run verify` | Verificar proyecto |
-| `./run-frontend.sh` | Iniciar frontend |
-| `npx hardhat run test-multiple-wallets.js` | Test sistema múltiples wallets |
-| `npx hardhat run test-admin-unlink.js` | Test desvinculación admin |
+| `npm run compile` | Compilar smart contract con Hardhat |
+| `npm test` | Ejecutar tests con Hardhat |
+| `npm run node` | Iniciar nodo Hardhat local (localhost:8545) |
+| `npm run deploy` | Desplegar contrato en nodo local |
+| `npm run frontend` | Instalar deps y ejecutar frontend (http://localhost:5173) |
+| `./run-frontend.sh` | Script alternativo para iniciar frontend |
 
 ## 🔗 Estructuras de Datos del Smart Contract
 
@@ -338,24 +348,24 @@ struct WalletInfo {
 ### Asset
 ```solidity
 struct Asset {
-    uint256 id;
-    address owner;
-    string description;
-    uint256 registrationDate;
-    bool active;
+    uint256 assetId;          // ID único auto-incremental
+    address owner;            // Propietario del activo
+    bool active;              // Estado: activo/inactivo
+    string assetType;         // Tipo de activo
+    string description;       // Descripción detallada
 }
 ```
 
 ### Certificate
 ```solidity
 struct Certificate {
-    uint256 id;
-    uint256 assetId;
-    string certificationName;
-    address issuer;
-    uint256 issueDate;
-    uint256 expirationDate;
-    bool revoked;
+    uint256 certId;           // ID único auto-incremental
+    uint256 assetId;          // ID del activo certificado
+    uint256 issuedAt;         // Timestamp de emisión
+    uint256 expiresAt;        // Timestamp de expiración
+    address issuer;           // Dirección del certificador
+    bool revoked;             // Estado: revocado o no
+    string certType;          // Tipo de certificación
 }
 ```
 
@@ -369,6 +379,6 @@ Trabajo Final de Máster en Blockchain
 
 ---
 
-**Última actualización:** 15 de enero de 2026  
-**Versión:** 2.0 - Sistema de Múltiples Wallets  
+**Última actualización:** 19 de enero de 2026  
+**Versión:** 3.0 - Limpieza y Distribuidor  
 **Estado:** ✅ Producción
