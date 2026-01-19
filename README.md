@@ -270,11 +270,24 @@ Pruebas incluidas:
 - ✅ Optimizaciones de gas
 - ✅ Validaciones de entrada
 
+## � Panel de Distribuidor (Nuevo)
+
+Implementación de panel completo para el rol DISTRIBUTOR:
+
+- **Mis Activos**: Visualización filtrable de todos los activos del distribuidor
+- **Certificaciones**: Vista de certificados con estado (válido/expirado/revocado)
+- **Reportes**: Generación y descarga de reportes en JSON con estadísticas completas
+
+**Características:**
+- ✅ Búsqueda y filtrado en tiempo real
+- ✅ Estadísticas resumidas
+- ✅ Exportación de reportes
+- ✅ Interfaz responsiva
+
 ## 📚 Documentación Adicional
 
 - **[QUICK-START.md](./QUICK-START.md)** - Guía rápida de inicio
 - **[README-TFM3.md](./README-TFM3.md)** - Detalles técnicos y arquitectura
-- **[ADMIN_UNLINK_IMPLEMENTATION.md](./ADMIN_UNLINK_IMPLEMENTATION.md)** - Detalles de desvinculación admin via blockchain
 - **[IA.md](./IA.md)** - Retrospectiva de uso de Inteligencia Artificial
 
 ## 🤖 Uso de Inteligencia Artificial
