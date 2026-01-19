@@ -7,6 +7,7 @@ import AssetManager from './components/AssetManager';
 import CertificateManager from './components/CertificateManager';
 import Dashboard from './components/Dashboard';
 import AuditorPanel from './components/AuditorPanel';
+import DistributorPanel from './components/DistributorPanel';
 import { CONTRACT_ABI } from './config/abi';
 import './App.css';
 
@@ -317,6 +318,14 @@ export default function App() {
             🔍 Auditoría
           </button>
         )}
+        {currentUser?.role === 'DISTRIBUTOR' && (
+          <button 
+            className={`tab ${activeTab === 'distributor' ? 'active' : ''}`}
+            onClick={() => setActiveTab('distributor')}
+          >
+            📦 Distribuidor
+          </button>
+        )}
       </nav>
 
       <main className="container">
@@ -330,6 +339,7 @@ export default function App() {
         {activeTab === 'assets' && <AssetManager signer={signer} contractAddress={contractAddress} />}
         {activeTab === 'certificates' && <CertificateManager signer={signer} contractAddress={contractAddress} />}
         {activeTab === 'auditor' && <AuditorPanel provider={provider} signer={signer} contractAddress={contractAddress} currentUser={currentUser} />}
+        {activeTab === 'distributor' && <DistributorPanel provider={provider} signer={signer} contractAddress={contractAddress} currentUser={currentUser} />}
       </main>
 
       <footer className="footer">
