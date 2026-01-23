@@ -130,7 +130,7 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
     function registerUser(
         string calldata username,
         string calldata role
-    ) external {
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(bytes(username).length > 0, "Invalid username");
         require(users[username].registeredAt == 0, "User already exists");
         require(_isValidRole(role), "Invalid role");
