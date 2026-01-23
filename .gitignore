@@ -86,6 +86,7 @@ coverage/
 dist/
 .next/
 out/
+broadcast/
 
 # Dependencias de Python (si usas scripts)
 __pycache__/
