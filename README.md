@@ -633,19 +633,35 @@ Ver [manual-usuario.md](./docs/manual-usuario.md) para más soluciones
 
 MIT License - Ver [LICENSE](./LICENSE)
 
+## 🔗 Repositorios
+
+Este proyecto está alojado en múltiples plataformas:
+
+- **GitHub:** https://github.com/mabanchio/industrial-traceability-blockchain
+- **GitLab:** https://gitlab.com/mabanchio/industrial-traceability-blockchain
+
+Ambos repositorios se mantienen sincronizados. Puedes clonar desde cualquiera:
+
+```bash
+# GitHub
+git clone https://github.com/mabanchio/industrial-traceability-blockchain.git
+
+# GitLab
+git clone https://gitlab.com/mabanchio/industrial-traceability-blockchain.git
+```
+
 ---
 
 ## 👤 Autor
 
-**Nombre:** Matías  
-**Proyecto:** TFM - Plataforma de Trazabilidad Industrial  
-**Institución:** [Universidad/Centro de Máster]  
-**Email:** [tu-email@example.com]  
-**LinkedIn:** [tu-perfil]  
+**Nombre:** Matías Banchio  
+**Proyecto:** TFM - Plataforma de Trazabilidad Industrial con Certificaciones Blockchain  
+**Institución:** Máster en Blockchain  
+**Año:** 2026
 
 ---
 
 **Estado del Proyecto:** ✅ **LISTO PARA PRODUCCIÓN**
 
-Última actualización: 23 de enero de 2026  
-Versión: 3.1 - Documentación Completa
+Última actualización: 25 de enero de 2026  
+Versión: 3.2 - Sincronización GitHub/GitLab
