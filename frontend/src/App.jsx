@@ -4,6 +4,7 @@ import Login from './components/Login';
 import AdminPanel from './components/AdminPanel';
 import UserProfile from './components/UserProfile';
 import AssetManager from './components/AssetManager';
+import ManufacturerPanel from './components/ManufacturerPanel';
 import CertificateManager from './components/CertificateManager';
 import Dashboard from './components/Dashboard';
 import AuditorPanel from './components/AuditorPanel';
@@ -302,7 +303,7 @@ export default function App() {
             📦 Activos
           </button>
         )}
-        {(currentUser?.role === 'CERTIFIER' || currentUser?.role === 'MANUFACTURER') && (
+        {currentUser?.role === 'CERTIFIER' && (
           <button 
             className={`tab ${activeTab === 'certificates' ? 'active' : ''}`}
             onClick={() => setActiveTab('certificates')}
@@ -336,7 +337,11 @@ export default function App() {
           <AdminPanel contract={contract} provider={provider} currentUser={currentUser} />
         )}
         {activeTab === 'dashboard' && <Dashboard provider={provider} signer={signer} contractAddress={contractAddress} blockchainStatus={blockchainStatus} workEnvironment={workEnvironment} />}
-        {activeTab === 'assets' && <AssetManager signer={signer} contractAddress={contractAddress} />}
+        {activeTab === 'assets' && (
+          currentUser?.role === 'MANUFACTURER' ? 
+            <ManufacturerPanel signer={signer} contractAddress={contractAddress} /> :
+            <AssetManager signer={signer} contractAddress={contractAddress} />
+        )}
         {activeTab === 'certificates' && <CertificateManager signer={signer} contractAddress={contractAddress} />}
         {activeTab === 'auditor' && <AuditorPanel provider={provider} signer={signer} contractAddress={contractAddress} currentUser={currentUser} />}
         {activeTab === 'distributor' && <DistributorPanel provider={provider} signer={signer} contractAddress={contractAddress} currentUser={currentUser} />}

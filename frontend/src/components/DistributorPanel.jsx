@@ -159,6 +159,29 @@ export default function DistributorPanel({ provider, signer, contractAddress, cu
     link.click();
   };
 
+  const deactivateAsset = async (assetId) => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const { CONTRACT_ABI } = await import('../config/abi.js');
+      const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
+      const tx = await contract.deactivateAsset(assetId);
+      await tx.wait();
+      
+      setSuccess('✅ Activo desactivado exitosamente');
+      setTimeout(() => setSuccess(''), 3000);
+      
+      // Recargar datos
+      loadDistributorData();
+    } catch (err) {
+      setError('❌ Error al desactivar activo: ' + (err.reason || err.message));
+      console.error('Error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRefresh = async () => {
     setError('');
     setSuccess('');
@@ -306,6 +329,7 @@ export default function DistributorPanel({ provider, signer, contractAddress, cu
                   <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Descripción</th>
                   <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600' }}>Estado</th>
                   <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600' }}>Certificados</th>
+                  <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -336,6 +360,29 @@ export default function DistributorPanel({ provider, signer, contractAddress, cu
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center', fontWeight: '600', color: '#3b82f6' }}>
                       {certificates[asset.assetId]?.length || 0}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      {asset.active ? (
+                        <button
+                          onClick={() => deactivateAsset(asset.assetId)}
+                          disabled={loading}
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '11px',
+                            backgroundColor: '#ef4444',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '3px',
+                            cursor: loading ? 'not-allowed' : 'pointer',
+                            opacity: loading ? 0.6 : 1
+                          }}
+                          title="Deshabilitar activo"
+                        >
+                          🛑
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: '#999' }}>No disponible</span>
+                      )}
                     </td>
                   </tr>
                 ))}
