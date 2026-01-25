@@ -76,6 +76,10 @@ export default function CertificateManager({ signer, contractAddress }) {
   const [certificatesLoading, setCertificatesLoading] = useState(false);
   const [expandedCertId, setExpandedCertId] = useState(null);
 
+  // Estados para renovación de certificados
+  const [renewingCertId, setRenewingCertId] = useState(null);
+  const [renewalDays, setRenewalDays] = useState('365');
+
   // Cargar activos disponibles y certificados cuando monta el componente
   useEffect(() => {
     loadAvailableAssets();
@@ -221,6 +225,41 @@ export default function CertificateManager({ signer, contractAddress }) {
       const tx = await contract.revokeCertificate(certIdToRevoke);
       await tx.wait();
       setMessage(`✅ Certificado ${certIdToRevoke} revocado`);
+      
+      // Recargar lista de certificados después de 1 segundo
+      setTimeout(() => {
+        loadAllCertificates();
+      }, 1000);
+    } catch (err) {
+      setMessage(`❌ Error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renewCertificateAction = async (certIdToRenew) => {
+    if (!renewalDays || renewalDays <= 0) {
+      setMessage('❌ Ingresa un número de días válido');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const contract = new Contract(contractAddress, CONTRACT_ABI, signer);
+      
+      // Obtener el certificado actual para saber su fecha de vencimiento
+      const cert = await contract.getCertificate(certIdToRenew);
+      const currentExpirationTimestamp = Number(cert.expiresAt);
+      
+      // Sumar los días de renovación a la fecha de vencimiento ACTUAL
+      const renewalSeconds = parseInt(renewalDays) * 24 * 60 * 60;
+      const newExpirationTimestamp = currentExpirationTimestamp + renewalSeconds;
+      
+      const tx = await contract.renewCertificate(certIdToRenew, newExpirationTimestamp);
+      await tx.wait();
+      setMessage(`✅ Certificado ${certIdToRenew} renovado por ${renewalDays} días adicionales`);
+      setRenewingCertId(null);
+      setRenewalDays('365');
       
       // Recargar lista de certificados después de 1 segundo
       setTimeout(() => {
@@ -568,23 +607,96 @@ export default function CertificateManager({ signer, contractAddress }) {
                             </span>
                           </td>
                           <td style={{ padding: '12px', textAlign: 'center' }}>
-                            {!cert.revoked && (
-                              <button
-                                onClick={() => revokeCertificateAction(cert.certId)}
-                                disabled={loading}
-                                style={{
-                                  padding: '6px 10px',
-                                  backgroundColor: '#ef4444',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  fontSize: '11px',
-                                  fontWeight: 'bold'
-                                }}
-                              >
-                                🔓 Revocar
-                              </button>
+                            {!cert.revoked ? (
+                              renewingCertId === cert.certId ? (
+                                <div style={{ display: 'flex', gap: '5px', alignItems: 'center', justifyContent: 'center' }}>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={renewalDays}
+                                    onChange={(e) => setRenewalDays(e.target.value)}
+                                    placeholder="días"
+                                    style={{
+                                      width: '60px',
+                                      padding: '4px',
+                                      fontSize: '11px',
+                                      border: '1px solid #d1d5db',
+                                      borderRadius: '3px'
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => renewCertificateAction(cert.certId)}
+                                    disabled={loading}
+                                    style={{
+                                      padding: '4px 8px',
+                                      backgroundColor: '#10b981',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      cursor: loading ? 'not-allowed' : 'pointer',
+                                      fontSize: '11px',
+                                      opacity: loading ? 0.6 : 1
+                                    }}
+                                  >
+                                    ✔️
+                                  </button>
+                                  <button
+                                    onClick={() => setRenewingCertId(null)}
+                                    style={{
+                                      padding: '4px 8px',
+                                      backgroundColor: '#6b7280',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      cursor: 'pointer',
+                                      fontSize: '11px'
+                                    }}
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
+                                  <button
+                                    onClick={() => {
+                                      setRenewingCertId(cert.certId);
+                                      setRenewalDays('365');
+                                    }}
+                                    disabled={loading}
+                                    style={{
+                                      padding: '6px 10px',
+                                      backgroundColor: '#3b82f6',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: loading ? 'not-allowed' : 'pointer',
+                                      fontSize: '11px',
+                                      fontWeight: 'bold'
+                                    }}
+                                    title="Renovar vigencia del certificado"
+                                  >
+                                    🔄 Renovar
+                                  </button>
+                                  <button
+                                    onClick={() => revokeCertificateAction(cert.certId)}
+                                    disabled={loading}
+                                    style={{
+                                      padding: '6px 10px',
+                                      backgroundColor: '#ef4444',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '11px',
+                                      fontWeight: 'bold'
+                                    }}
+                                  >
+                                    🔓 Revocar
+                                  </button>
+                                </div>
+                              )
+                            ) : (
+                              <span style={{ fontSize: '11px', color: '#999' }}>No disponible</span>
                             )}
                           </td>
                         </tr>
