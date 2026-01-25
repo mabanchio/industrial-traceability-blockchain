@@ -27,6 +27,56 @@ export default function AssetManager({ signer, contractAddress }) {
   // Historial
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
+  
+  // Rol y wallet del usuario
+  const [userRole, setUserRole] = useState(null);
+  const [userWallet, setUserWallet] = useState(null);
+
+  // Cargar activos desde blockchain - Definir primero
+  const loadAssetsFromBlockchain = async () => {
+    if (!signer || !contractAddress) return;
+    try {
+      const contract = new Contract(contractAddress, CONTRACT_ABI, signer);
+      const walletAddress = await signer.getAddress();
+      setUserWallet(walletAddress);
+      
+      // Obtener rol del usuario
+      try {
+        const userRoleValue = await contract.getUserRole(walletAddress);
+        setUserRole(userRoleValue);
+      } catch (e) {
+        console.log('No se pudo obtener el rol:', e.message);
+        setUserRole(null);
+      }
+      
+      const userAssets = [];
+      
+      try {
+        // Intentar obtener del método getUserAssets si existe
+        const assetIds = await contract.getUserAssets(walletAddress);
+        for (const assetId of assetIds) {
+          try {
+            const asset = await contract.getAsset(assetId);
+            userAssets.push({
+              id: assetId.toString(),
+              assetType: asset.assetType || 'Desconocido',
+              description: asset.description || '',
+              owner: asset.owner,
+              active: asset.active
+            });
+          } catch (e) {
+            // Skip si el asset no existe
+          }
+        }
+      } catch (e) {
+        console.log('getUserAssets no disponible, usando búsqueda manual');
+      }
+      
+      setAssets(userAssets);
+    } catch (err) {
+      console.warn('Error cargando assets del blockchain:', err.message);
+    }
+  };
 
   // Detectar modo offline y recargar cuando cambia
   useEffect(() => {
@@ -41,8 +91,11 @@ export default function AssetManager({ signer, contractAddress }) {
       setAssets([]); // Limpiar activos locales
     } else if (offline) {
       loadAssets(); // Cargar activos si vuelves a offline
+    } else {
+      // Cargar activos del blockchain cuando no estamos en offline
+      loadAssetsFromBlockchain();
     }
-  }, [localStorage.getItem('workEnvironment')]);
+  }, [signer, contractAddress]);
 
   // Cargar activos desde localStorage (SOLO en modo offline)
   const loadAssets = () => {
@@ -156,46 +209,6 @@ export default function AssetManager({ signer, contractAddress }) {
     }
   };
 
-  // Cargar activos desde blockchain
-  const loadAssetsFromBlockchain = async () => {
-    try {
-      const contract = new Contract(contractAddress, CONTRACT_ABI, signer);
-      const walletAddress = await signer.getAddress();
-      
-      // Obtener lista de todos los asset IDs que pertenecen a esta wallet
-      // Iteramos desde 1 hasta un número razonable para buscar activos
-      const userAssets = [];
-      
-      try {
-        // Intentar obtener del método getUserAssets si existe
-        const assetIds = await contract.getUserAssets(walletAddress);
-        for (const assetId of assetIds) {
-          try {
-            const asset = await contract.getAsset(assetId);
-            userAssets.push({
-              id: assetId.toString(),
-              assetType: asset.assetType,
-              description: asset.description,
-              owner: asset.owner,
-              active: asset.active
-            });
-          } catch (e) {
-            // Skip si el asset no existe
-          }
-        }
-      } catch (e) {
-        // Si getUserAssets no existe, hacer fallback a búsqueda manual
-        console.log('getUserAssets no disponible, usando búsqueda manual');
-        // Esto es un fallback básico
-      }
-      
-      setAssets(userAssets);
-    } catch (err) {
-      console.warn('Error cargando assets del blockchain:', err.message);
-      // No mostrar error al usuario, solo falla silenciosamente
-    }
-  };
-
   const registerAsset = isOfflineMode ? registerAssetOffline : registerAssetBlockchain;
 
   // Modo Offline: Obtener activo
@@ -239,6 +252,25 @@ export default function AssetManager({ signer, contractAddress }) {
   };
 
   const getAsset = isOfflineMode ? getAssetOffline : getAssetBlockchain;
+
+  // Desactivar activo en blockchain
+  const deactivateAssetBlockchain = async (assetId) => {
+    try {
+      setLoading(true);
+      const contract = new Contract(contractAddress, CONTRACT_ABI, signer);
+      const tx = await contract.deactivateAsset(assetId);
+      await tx.wait();
+      setMessage('✅ Activo desactivado en blockchain');
+      setTimeout(() => setMessage(''), 2000);
+      // Recargar activos
+      loadAssetsFromBlockchain();
+    } catch (err) {
+      setMessage('❌ Error al desactivar activo: ' + err.message);
+      console.error('Error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Desactivar activo en modo offline
   const deactivateAssetOffline = (id) => {
@@ -604,7 +636,7 @@ export default function AssetManager({ signer, contractAddress }) {
                       <th style={{ padding: '10px', textAlign: 'left' }}>Propietario</th>
                       <th style={{ padding: '10px', textAlign: 'center' }}>Estado</th>
                       <th style={{ padding: '10px', textAlign: 'left' }}>Creado</th>
-                      {isOfflineMode && <th style={{ padding: '10px', textAlign: 'center' }}>Acciones</th>}
+                      {(isOfflineMode || (userRole && userRole.includes('ASSET_CREATOR'))) && <th style={{ padding: '10px', textAlign: 'center' }}>Acciones</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -660,72 +692,99 @@ export default function AssetManager({ signer, contractAddress }) {
                             <td style={{ padding: '10px', fontSize: '11px' }}>
                               {a.createdAt ? new Date(a.createdAt).toLocaleDateString() : 'N/A'}
                             </td>
-                            {isOfflineMode && (
+                            {(isOfflineMode || (userRole && userRole.includes('ASSET_CREATOR'))) && (
                               <td style={{ padding: '10px', textAlign: 'center' }}>
-                                <button
-                                  onClick={() => startEdit(a)}
-                                  style={{
-                                    padding: '4px 6px',
-                                    marginRight: '3px',
-                                    fontSize: '11px',
-                                    backgroundColor: '#3b82f6',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '3px',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  ✏️
-                                </button>
-                                {a.active ? (
-                                  <button 
-                                    onClick={() => deactivateAssetOffline(a.id)}
-                                    style={{
-                                      padding: '4px 6px',
-                                      marginRight: '3px',
-                                      fontSize: '11px',
-                                      backgroundColor: '#ef4444',
-                                      color: 'white',
-                                      border: 'none',
-                                      borderRadius: '3px',
-                                      cursor: 'pointer'
-                                    }}
-                                    title="Desactivar activo"
-                                  >
-                                    🛑
-                                  </button>
+                                {isOfflineMode ? (
+                                  <>
+                                    <button
+                                      onClick={() => startEdit(a)}
+                                      style={{
+                                        padding: '4px 6px',
+                                        marginRight: '3px',
+                                        fontSize: '11px',
+                                        backgroundColor: '#3b82f6',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      ✏️
+                                    </button>
+                                    {a.active ? (
+                                      <button 
+                                        onClick={() => deactivateAssetOffline(a.id)}
+                                        style={{
+                                          padding: '4px 6px',
+                                          marginRight: '3px',
+                                          fontSize: '11px',
+                                          backgroundColor: '#ef4444',
+                                          color: 'white',
+                                          border: 'none',
+                                          borderRadius: '3px',
+                                          cursor: 'pointer'
+                                        }}
+                                        title="Desactivar activo"
+                                      >
+                                        🛑
+                                      </button>
+                                    ) : (
+                                      <button 
+                                        onClick={() => reactivateAssetOffline(a.id)}
+                                        style={{
+                                          padding: '4px 6px',
+                                          marginRight: '3px',
+                                          fontSize: '11px',
+                                          backgroundColor: '#10b981',
+                                          color: 'white',
+                                          border: 'none',
+                                          borderRadius: '3px',
+                                          cursor: 'pointer'
+                                        }}
+                                        title="Reactivar activo"
+                                      >
+                                        ♻️
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => deleteAsset(a.id)}
+                                      style={{
+                                        padding: '4px 6px',
+                                        fontSize: '11px',
+                                        backgroundColor: '#dc2626',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      🗑️
+                                    </button>
+                                  </>
                                 ) : (
-                                  <button 
-                                    onClick={() => reactivateAssetOffline(a.id)}
-                                    style={{
-                                      padding: '4px 6px',
-                                      marginRight: '3px',
-                                      fontSize: '11px',
-                                      backgroundColor: '#10b981',
-                                      color: 'white',
-                                      border: 'none',
-                                      borderRadius: '3px',
-                                      cursor: 'pointer'
-                                    }}
-                                    title="Reactivar activo"
-                                  >
-                                    ♻️
-                                  </button>
+                                  <>
+                                    {a.active && (
+                                      <button 
+                                        onClick={() => deactivateAssetBlockchain(a.id)}
+                                        disabled={loading}
+                                        style={{
+                                          padding: '4px 6px',
+                                          marginRight: '3px',
+                                          fontSize: '11px',
+                                          backgroundColor: '#ef4444',
+                                          color: 'white',
+                                          border: 'none',
+                                          borderRadius: '3px',
+                                          cursor: loading ? 'not-allowed' : 'pointer',
+                                          opacity: loading ? 0.6 : 1
+                                        }}
+                                        title="Desactivar activo"
+                                      >
+                                        🛑
+                                      </button>
+                                    )}
+                                  </>
                                 )}
-                                <button
-                                  onClick={() => deleteAsset(a.id)}
-                                  style={{
-                                    padding: '4px 6px',
-                                    fontSize: '11px',
-                                    backgroundColor: '#dc2626',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '3px',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  🗑️
-                                </button>
                               </td>
                             )}
                           </>

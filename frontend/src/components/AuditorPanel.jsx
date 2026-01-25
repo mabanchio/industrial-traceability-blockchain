@@ -42,6 +42,7 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
     try {
       const contract = new Contract(contractAddress, CONTRACT_ABI, provider);
       const allAssets = [];
+      const processedAssetIds = new Set(); // Rastrear IDs únicos
       
       // Obtener todos los usuarios para luego sus activos
       const allUsers = await contract.getAllUsers();
@@ -50,12 +51,20 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
         try {
           const userAssets = await contract.getUserAssets(user.activeWallet);
           for (const assetId of userAssets) {
-            const asset = await contract.getAsset(assetId);
-            allAssets.push({
-              id: Number(assetId),
-              ...asset,
-              owner: user.username
-            });
+            const assetIdNum = Number(assetId);
+            // Solo procesar si no lo hemos visto antes
+            if (!processedAssetIds.has(assetIdNum)) {
+              processedAssetIds.add(assetIdNum);
+              const asset = await contract.getAsset(assetId);
+              allAssets.push({
+                id: assetIdNum,
+                assetType: asset.assetType || 'Desconocido',
+                description: asset.description || '',
+                status: asset.status || 'Activo',
+                owner: user.username,
+                ...asset
+              });
+            }
           }
         } catch (e) {
           console.log(`No se pudieron cargar activos del usuario ${user.username}`);
@@ -63,7 +72,7 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
       }
       
       setAssets(allAssets);
-      setMessage(`✅ Se cargaron ${allAssets.length} activos`);
+      setMessage(`✅ Se cargaron ${allAssets.length} activos únicos`);
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       setMessage(`❌ Error al cargar activos: ${err.message}`);
@@ -79,35 +88,45 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
     try {
       const contract = new Contract(contractAddress, CONTRACT_ABI, provider);
       const allCerts = [];
+      const processedAssetIds = new Set(); // Rastrear IDs únicos
+      const processedCertIds = new Set(); // Rastrear certificados únicos
       
       // Cargar certificados de todos los activos
-      const allAssets = [];
       const allUsers = await contract.getAllUsers();
       
       for (const user of allUsers) {
         try {
           const userAssets = await contract.getUserAssets(user.activeWallet);
           for (const assetId of userAssets) {
-            allAssets.push(Number(assetId));
+            const assetIdNum = Number(assetId);
+            // Solo procesar si no lo hemos visto antes
+            if (!processedAssetIds.has(assetIdNum)) {
+              processedAssetIds.add(assetIdNum);
+              try {
+                const certIds = await contract.getCertificatesByAsset(assetId);
+                for (const certId of certIds) {
+                  const certIdNum = Number(certId);
+                  // Solo procesar certificado si no lo hemos visto
+                  if (!processedCertIds.has(certIdNum)) {
+                    processedCertIds.add(certIdNum);
+                    const cert = await contract.getCertificate(certId);
+                    allCerts.push({
+                      id: certIdNum,
+                      assetId: assetIdNum,
+                      certType: cert.certType || 'Desconocido',
+                      status: cert.status || 'Activo',
+                      expiresAt: cert.expiresAt || 0,
+                      ...cert
+                    });
+                  }
+                }
+              } catch (e) {
+                console.log(`No se pudieron cargar certificados del activo ${assetIdNum}`);
+              }
+            }
           }
         } catch (e) {
-          // Sin activos
-        }
-      }
-      
-      for (const assetId of allAssets) {
-        try {
-          const certIds = await contract.getCertificatesByAsset(assetId);
-          for (const certId of certIds) {
-            const cert = await contract.getCertificate(certId);
-            allCerts.push({
-              id: Number(certId),
-              assetId: assetId,
-              ...cert
-            });
-          }
-        } catch (e) {
-          console.log(`No se pudieron cargar certificados del activo ${assetId}`);
+          // Sin activos para este usuario
         }
       }
       
@@ -260,6 +279,8 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
 
   useEffect(() => {
     loadAssets();
+    loadCertificates();
+    loadUsers();
   }, [provider, contractAddress]);
 
   const formatDate = (timestamp) => {
@@ -423,7 +444,7 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
                     <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
                       <td style={{ padding: '10px' }}><strong>{asset.id}</strong></td>
                       <td style={{ padding: '10px' }}>{asset.assetType}</td>
-                      <td style={{ padding: '10px' }}>{asset.description.substring(0, 40)}...</td>
+                      <td style={{ padding: '10px' }}>{asset.description ? asset.description.substring(0, 40) + (asset.description.length > 40 ? '...' : '') : '-'}</td>
                       <td style={{ padding: '10px' }}>{asset.owner}</td>
                       <td style={{ padding: '10px' }}>
                         <span style={{
@@ -462,7 +483,19 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
               </table>
             </div>
           ) : (
-            <p style={{ color: '#6b7280', textAlign: 'center', padding: '20px' }}>No hay activos para mostrar</p>
+            <div style={{ color: '#6b7280', textAlign: 'center', padding: '40px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+              {loading ? (
+                <>
+                  <p style={{ fontSize: '18px', marginBottom: '10px' }}>⏳ Cargando activos...</p>
+                  <p style={{ fontSize: '12px', color: '#999' }}>Por favor espera mientras se cargan los datos del sistema</p>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: '16px', marginBottom: '10px' }}>📦 No hay activos para mostrar</p>
+                  <p style={{ fontSize: '12px', color: '#999' }}>No se encontraron activos con los criterios de búsqueda</p>
+                </>
+              )}
+            </div>
           )}
 
           {/* Modal de Detalles */}
@@ -626,7 +659,19 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
               </table>
             </div>
           ) : (
-            <p style={{ color: '#6b7280', textAlign: 'center', padding: '20px' }}>No hay certificados para mostrar</p>
+            <div style={{ color: '#6b7280', textAlign: 'center', padding: '40px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+              {loading ? (
+                <>
+                  <p style={{ fontSize: '18px', marginBottom: '10px' }}>⏳ Cargando certificados...</p>
+                  <p style={{ fontSize: '12px', color: '#999' }}>Por favor espera mientras se cargan los datos del sistema</p>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: '16px', marginBottom: '10px' }}>✅ No hay certificados para mostrar</p>
+                  <p style={{ fontSize: '12px', color: '#999' }}>No se encontraron certificados con los criterios de búsqueda</p>
+                </>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -717,7 +762,19 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
               </table>
             </div>
           ) : (
-            <p style={{ color: '#6b7280', textAlign: 'center', padding: '20px' }}>No hay usuarios para mostrar</p>
+            <div style={{ color: '#6b7280', textAlign: 'center', padding: '40px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+              {loading ? (
+                <>
+                  <p style={{ fontSize: '18px', marginBottom: '10px' }}>⏳ Cargando usuarios...</p>
+                  <p style={{ fontSize: '12px', color: '#999' }}>Por favor espera mientras se cargan los datos del sistema</p>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: '16px', marginBottom: '10px' }}>👥 No hay usuarios para mostrar</p>
+                  <p style={{ fontSize: '12px', color: '#999' }}>No se encontraron usuarios con los criterios de búsqueda</p>
+                </>
+              )}
+            </div>
           )}
         </div>
       )}

@@ -3,6 +3,58 @@ import { Contract } from 'ethers';
 import { CONTRACT_ABI } from '../config/abi';
 
 export default function CertificateManager({ signer, contractAddress }) {
+  // Tipos de certificados disponibles con descripciones
+  const CERTIFICATE_TYPES = {
+    'ISO-9001': {
+      label: 'ISO 9001',
+      description: 'Sistema de Gestión de Calidad. Establece los requisitos para que una organización demuestre su capacidad de proporcionar productos y servicios de forma consistente.'
+    },
+    'ISO-14001': {
+      label: 'ISO 14001',
+      description: 'Sistema de Gestión Ambiental. Ayuda a las organizaciones a mejorar el desempeño ambiental mediante la gestión sistemática de los aspectos ambientales.'
+    },
+    'ISO-27001': {
+      label: 'ISO 27001',
+      description: 'Sistema de Gestión de Seguridad de la Información. Especifica los requisitos para establecer, implementar y mantener un SGSI efectivo.'
+    },
+    'ISO-45001': {
+      label: 'ISO 45001',
+      description: 'Sistema de Gestión de Seguridad y Salud en el Trabajo. Proporciona un marco para gestionar los riesgos y oportunidades de la SST.'
+    },
+    'ISO-50001': {
+      label: 'ISO 50001',
+      description: 'Sistema de Gestión de Energía. Permite a las organizaciones establecer sistemas para mejorar el rendimiento energético.'
+    },
+    'SOC-2': {
+      label: 'SOC 2',
+      description: 'Informe de Controles de Servicio. Evalúa los controles internos de una organización relacionados con seguridad, disponibilidad e integridad.'
+    },
+    'GDPR': {
+      label: 'GDPR',
+      description: 'Regulación General de Protección de Datos. Certificación de cumplimiento con regulaciones de protección de datos personales en la UE.'
+    },
+    'HIPAA': {
+      label: 'HIPAA',
+      description: 'Ley de Portabilidad y Responsabilidad de Seguros de Salud. Protege la privacidad e integridad de la información sanitaria.'
+    },
+    'PCI-DSS': {
+      label: 'PCI DSS',
+      description: 'Estándar de Seguridad de Datos de la Industria de Tarjetas de Pago. Requisitos de seguridad para procesar tarjetas de crédito.'
+    },
+    'RoHS': {
+      label: 'RoHS',
+      description: 'Restricción de Sustancias Peligrosas. Directiva europea que restringe el uso de sustancias peligrosas en equipos eléctricos y electrónicos.'
+    },
+    'CE': {
+      label: 'Marcado CE',
+      description: 'Conformidad Europea. Indicador de que un producto cumple con la legislación de seguridad de la UE aplicable.'
+    },
+    'CUSTOM': {
+      label: 'Certificado Personalizado',
+      description: 'Tipo de certificado personalizado según las necesidades específicas de su organización.'
+    }
+  };
+
   const [assetId, setAssetId] = useState('');
   const [certType, setCertType] = useState('ISO-9001');
   const [daysValid, setDaysValid] = useState('365');
@@ -267,19 +319,42 @@ export default function CertificateManager({ signer, contractAddress }) {
 
           {/* FORM PARA EMITIR CERTIFICADO */}
           <form onSubmit={issueCertificate} style={{ marginTop: '15px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '10px', alignItems: 'flex-end' }}>
-              <div>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '10px', alignItems: 'flex-start' }}>
+              <div style={{ gridColumn: '1 / 4' }}>
                 <label><strong>Tipo de Certificado</strong></label>
                 <select
                   value={certType}
                   onChange={(e) => setCertType(e.target.value)}
-                  style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ddd', borderRadius: '4px' }}
+                  style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ddd', borderRadius: '4px', fontWeight: 'bold' }}
                 >
-                  <option value="ISO-9001">ISO-9001</option>
-                  <option value="ISO-14001">ISO-14001</option>
-                  <option value="ISO-27001">ISO-27001</option>
-                  <option value="CUSTOM">CUSTOM</option>
+                  <option value="ISO-9001">ISO 9001 - Sistema de Gestión de Calidad</option>
+                  <option value="ISO-14001">ISO 14001 - Sistema de Gestión Ambiental</option>
+                  <option value="ISO-27001">ISO 27001 - Sistema de Gestión de Seguridad de la Información</option>
+                  <option value="ISO-45001">ISO 45001 - Sistema de Gestión de Seguridad y Salud en el Trabajo</option>
+                  <option value="ISO-50001">ISO 50001 - Sistema de Gestión de Energía</option>
+                  <option value="SOC-2">SOC 2 - Informe de Controles de Servicio</option>
+                  <option value="GDPR">GDPR - Regulación General de Protección de Datos</option>
+                  <option value="HIPAA">HIPAA - Ley de Portabilidad y Responsabilidad de Seguros de Salud</option>
+                  <option value="PCI-DSS">PCI DSS - Estándar de Seguridad de Datos de la Industria de Tarjetas</option>
+                  <option value="RoHS">RoHS - Restricción de Sustancias Peligrosas</option>
+                  <option value="CE">Marcado CE - Conformidad Europea</option>
+                  <option value="CUSTOM">Certificado Personalizado</option>
                 </select>
+                {CERTIFICATE_TYPES[certType] && (
+                  <div style={{
+                    marginTop: '10px',
+                    padding: '10px',
+                    backgroundColor: '#f0f7ff',
+                    border: '1px solid #3b82f6',
+                    borderRadius: '4px',
+                    fontSize: '13px',
+                    color: '#1e40af',
+                    lineHeight: '1.5'
+                  }}>
+                    <strong>ℹ️ {CERTIFICATE_TYPES[certType].label}:</strong>
+                    <p style={{ margin: '5px 0 0 0' }}>{CERTIFICATE_TYPES[certType].description}</p>
+                  </div>
+                )}
               </div>
               <div>
                 <label><strong>Válido por (días)</strong></label>
@@ -300,7 +375,9 @@ export default function CertificateManager({ signer, contractAddress }) {
                   border: 'none',
                   borderRadius: '4px',
                   cursor: loading || !assetId ? 'not-allowed' : 'pointer',
-                  fontWeight: 'bold'
+                  fontWeight: 'bold',
+                  marginTop: '33px',
+                  height: '36px'
                 }}
               >
                 {loading ? '⏳ Emitiendo...' : '✅ Emitir'}
@@ -518,19 +595,6 @@ export default function CertificateManager({ signer, contractAddress }) {
               </div>
             )}
           </>
-        )}
-
-        {message && (
-          <p style={{
-            marginTop: '15px',
-            padding: '12px',
-            backgroundColor: message.includes('❌') ? '#ffebee' : '#e8f5e9',
-            color: message.includes('❌') ? '#c62828' : '#2e7d32',
-            borderRadius: '4px',
-            fontWeight: 'bold'
-          }}>
-            {message}
-          </p>
         )}
       </div>
     </div>
