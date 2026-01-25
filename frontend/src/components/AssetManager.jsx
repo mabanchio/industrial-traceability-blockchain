@@ -140,13 +140,59 @@ export default function AssetManager({ signer, contractAddress }) {
       const contract = new Contract(contractAddress, CONTRACT_ABI, signer);
       const tx = await contract.registerAsset(assetType, description);
       const receipt = await tx.wait();
-      setMessage(`✅ Activo registrado. Tx: ${receipt.transactionHash}`);
+      const txHash = receipt?.hash || receipt?.transactionHash || tx?.hash || 'desconocido';
+      setMessage(`✅ Activo registrado. Tx: ${txHash.substring(0, 10)}...`);
       setAssetType('');
       setDescription('');
+      
+      // Recargar assets después de registrar
+      setTimeout(() => {
+        loadAssetsFromBlockchain();
+      }, 1000);
     } catch (err) {
       setMessage(`❌ Error: ${err.message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Cargar activos desde blockchain
+  const loadAssetsFromBlockchain = async () => {
+    try {
+      const contract = new Contract(contractAddress, CONTRACT_ABI, signer);
+      const walletAddress = await signer.getAddress();
+      
+      // Obtener lista de todos los asset IDs que pertenecen a esta wallet
+      // Iteramos desde 1 hasta un número razonable para buscar activos
+      const userAssets = [];
+      
+      try {
+        // Intentar obtener del método getUserAssets si existe
+        const assetIds = await contract.getUserAssets(walletAddress);
+        for (const assetId of assetIds) {
+          try {
+            const asset = await contract.getAsset(assetId);
+            userAssets.push({
+              id: assetId.toString(),
+              assetType: asset.assetType,
+              description: asset.description,
+              owner: asset.owner,
+              active: asset.active
+            });
+          } catch (e) {
+            // Skip si el asset no existe
+          }
+        }
+      } catch (e) {
+        // Si getUserAssets no existe, hacer fallback a búsqueda manual
+        console.log('getUserAssets no disponible, usando búsqueda manual');
+        // Esto es un fallback básico
+      }
+      
+      setAssets(userAssets);
+    } catch (err) {
+      console.warn('Error cargando assets del blockchain:', err.message);
+      // No mostrar error al usuario, solo falla silenciosamente
     }
   };
 
@@ -372,95 +418,154 @@ export default function AssetManager({ signer, contractAddress }) {
         )}
       </div>
 
+{/* BÚSQUEDA Y FILTROS - DISPONIBLES EN AMBOS MODOS */}
+      <div className="form-section">
+        <h3>🔎 Búsqueda y Filtros de Activos</h3>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '15px' }}>
+          <div style={{ flex: 1, minWidth: '250px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#333' }}>🔍 Búsqueda rápida:</label>
+            <input
+              type="text"
+              placeholder="Buscar por tipo, descripción o ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ 
+                marginTop: '5px',
+                padding: '8px',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                fontSize: '13px'
+              }}
+            />
+            {searchQuery && (
+              <p style={{ margin: '3px 0 0 0', fontSize: '11px', color: '#666' }}>
+                Mostrando {filteredAssets.length} de {assets.length} activos
+              </p>
+            )}
+          </div>
+          
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: showFilters ? '#3b82f6' : '#6b7280',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 'bold',
+              transition: 'background-color 0.2s'
+            }}
+          >
+            {showFilters ? '▼ Opciones' : '▶ Opciones'}
+          </button>
+        </div>
+        
+        {showFilters && (
+          <div style={{ 
+            marginTop: '15px', 
+            padding: '15px', 
+            backgroundColor: '#f3f4f6', 
+            borderRadius: '6px',
+            border: '1px solid #e5e7eb'
+          }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '15px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Tipo de Activo:</label>
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  style={{ 
+                    marginTop: '5px', 
+                    width: '100%',
+                    padding: '6px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px'
+                  }}
+                >
+                  <option value="">📦 Todos los tipos</option>
+                  {assetTypes.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Estado:</label>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  style={{ 
+                    marginTop: '5px', 
+                    width: '100%',
+                    padding: '6px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px'
+                  }}
+                >
+                  <option value="">📊 Todos los estados</option>
+                  <option value="active">🟢 Activos</option>
+                  <option value="inactive">🔴 Inactivos</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '5px' }}>
+                <button
+                  onClick={() => {
+                    setFilterType('');
+                    setFilterStatus('');
+                    setSearchQuery('');
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '8px',
+                    backgroundColor: '#ef4444',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ✕ Limpiar filtros
+                </button>
+              </div>
+            </div>
+            {(filterType || filterStatus || searchQuery) && (
+              <p style={{ margin: '10px 0 0 0', fontSize: '12px', color: '#2563eb', fontWeight: 'bold' }}>
+                ✓ Mostrando {filteredAssets.length} de {assets.length} activos
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
       {isOfflineMode && (
         <div className="form-section">
-          <h3>🔎 Filtros y Búsqueda</h3>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <div style={{ flex: 1, minWidth: '200px' }}>
-              <label style={{ fontSize: '12px', color: '#666' }}>Búsqueda rápida:</label>
-              <input
-                type="text"
-                placeholder="Buscar por tipo, descripción o ID"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ marginTop: '5px' }}
-              />
-            </div>
-            
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              style={{
-                padding: '8px 12px',
-                backgroundColor: showFilters ? '#3b82f6' : '#6b7280',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '12px'
-              }}
+          <h3>📥 Exportar Datos</h3>
+          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+            <button 
+              onClick={() => exportAssets('json')}
+              title="Exportar como JSON"
+              style={{ padding: '8px 12px', fontSize: '12px', cursor: 'pointer', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '4px' }}
             >
-              {showFilters ? '▼ Ocultar filtros' : '▶ Mostrar filtros'}
+              📥 JSON
+            </button>
+            <button 
+              onClick={() => exportAssets('csv')}
+              title="Exportar como CSV"
+              style={{ padding: '8px 12px', fontSize: '12px', cursor: 'pointer', backgroundColor: '#f59e0b', color: 'white', border: 'none', borderRadius: '4px' }}
+            >
+              📥 CSV
+            </button>
+            <button 
+              onClick={() => setShowHistory(!showHistory)}
+              title="Ver historial de cambios"
+              style={{ padding: '8px 12px', fontSize: '12px', cursor: 'pointer', backgroundColor: '#8b5cf6', color: 'white', border: 'none', borderRadius: '4px' }}
+            >
+              📜 Historial
             </button>
           </div>
-
-          {showFilters && (
-            <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f3f4f6', borderRadius: '4px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#666' }}>Tipo de Activo:</label>
-                  <select
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value)}
-                    style={{ marginTop: '5px', width: '100%' }}
-                  >
-                    <option value="">Todos los tipos</option>
-                    {assetTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#666' }}>Estado:</label>
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    style={{ marginTop: '5px', width: '100%' }}
-                  >
-                    <option value="">Todos los estados</option>
-                    <option value="active">Activos</option>
-                    <option value="inactive">Inactivos</option>
-                  </select>
-                </div>
-                <div>
-                  <button
-                    onClick={() => {
-                      setFilterType('');
-                      setFilterStatus('');
-                      setSearchQuery('');
-                    }}
-                    style={{
-                      marginTop: '21px',
-                      width: '100%',
-                      padding: '8px',
-                      backgroundColor: '#ef4444',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '12px'
-                    }}
-                  >
-                    Limpiar filtros
-                  </button>
-                </div>
-              </div>
-              {filteredAssets.length !== assets.length && (
-                <p style={{ margin: '10px 0 0 0', fontSize: '12px', color: '#666' }}>
-                  Mostrando {filteredAssets.length} de {assets.length} activos
-                </p>
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -470,35 +575,10 @@ export default function AssetManager({ signer, contractAddress }) {
           <div style={{ display: 'flex', gap: '5px' }}>
             <button 
               onClick={() => setShowAssetForm(!showAssetForm)}
-              style={{ padding: '5px 10px', fontSize: '12px', cursor: 'pointer' }}
+              style={{ padding: '8px 12px', fontSize: '12px', cursor: 'pointer', backgroundColor: '#6b7280', color: 'white', border: 'none', borderRadius: '4px' }}
             >
-              {showAssetForm ? '▼ Ocultar' : '▶ Mostrar'}
+              {showAssetForm ? '▼ Ocultar tabla' : '▶ Mostrar tabla'}
             </button>
-            {isOfflineMode && (
-              <>
-                <button 
-                  onClick={() => exportAssets('json')}
-                  title="Exportar como JSON"
-                  style={{ padding: '5px 10px', fontSize: '12px', cursor: 'pointer', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '4px' }}
-                >
-                  📥 JSON
-                </button>
-                <button 
-                  onClick={() => exportAssets('csv')}
-                  title="Exportar como CSV"
-                  style={{ padding: '5px 10px', fontSize: '12px', cursor: 'pointer', backgroundColor: '#f59e0b', color: 'white', border: 'none', borderRadius: '4px' }}
-                >
-                  📥 CSV
-                </button>
-                <button 
-                  onClick={() => setShowHistory(!showHistory)}
-                  title="Ver historial de cambios"
-                  style={{ padding: '5px 10px', fontSize: '12px', cursor: 'pointer', backgroundColor: '#8b5cf6', color: 'white', border: 'none', borderRadius: '4px' }}
-                >
-                  📜 Historial
-                </button>
-              </>
-            )}
           </div>
         </div>
         

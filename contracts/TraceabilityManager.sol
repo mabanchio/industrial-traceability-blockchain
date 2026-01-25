@@ -118,6 +118,19 @@ contract TraceabilityManager is AccessControl, ReentrancyGuard {
         passwordHashes[adminUsername] = keccak256(abi.encodePacked("admin"));
         
         emit UserRegistered(adminUsername, "ADMIN", block.timestamp);
+        
+        // Vincular automáticamente la wallet del msg.sender al admin
+        users[adminUsername].wallets.push(msg.sender);
+        walletInfo[msg.sender] = WalletInfo({
+            walletAddress: msg.sender,
+            active: true,
+            linkedAt: block.timestamp,
+            deactivatedAt: 0
+        });
+        users[adminUsername].activeWallet = msg.sender;
+        walletToUsername[msg.sender] = adminUsername;
+        
+        emit WalletLinked(adminUsername, msg.sender, true, block.timestamp);
     }
 
     // ═══════════════════════════════════════════════════════════════
