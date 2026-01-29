@@ -114,8 +114,10 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
                       id: certIdNum,
                       assetId: assetIdNum,
                       certType: cert.certType || 'Desconocido',
-                      status: cert.status || 'Activo',
                       expiresAt: cert.expiresAt || 0,
+                      revoked: cert.revoked || false,
+                      issuer: cert.issuer,
+                      issuedAt: cert.issuedAt,
                       ...cert
                     });
                   }
