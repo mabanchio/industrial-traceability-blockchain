@@ -111,14 +111,12 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
                     processedCertIds.add(certIdNum);
                     const cert = await contract.getCertificate(certId);
                     allCerts.push({
+                      ...cert,
                       id: certIdNum,
                       assetId: assetIdNum,
                       certType: cert.certType || 'Desconocido',
                       expiresAt: cert.expiresAt || 0,
                       revoked: cert.revoked || false,
-                      issuer: cert.issuer,
-                      issuedAt: cert.issuedAt,
-                      ...cert
                     });
                   }
                 }
@@ -133,6 +131,7 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
       }
       
       setCertificates(allCerts);
+      console.log('Certificados cargados:', allCerts.map(c => ({ id: c.id, certType: c.certType, revoked: c.revoked })));
       setMessage(`✅ Se cargaron ${allCerts.length} certificados`);
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
@@ -196,7 +195,6 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
       const contract = new Contract(contractAddress, CONTRACT_ABI, provider);
       
       const totalAssets = assets.length;
-      const totalCerts = certificates.length;
       const totalUsers = users.length;
       
       const assetsByStatus = {
@@ -205,20 +203,32 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
         Revocado: assets.filter(a => a.status === 'Revocado').length,
       };
       
+      const now = Math.floor(Date.now() / 1000);
+      const totalCerts = certificates.length; // Total de certificados generados
+      const revokedCerts = certificates.filter(c => c.revoked === true).length;
+      const expiredCerts = certificates.filter(c => Number(c.expiresAt) < now && c.revoked !== true).length;
+      const activeCerts = totalCerts - revokedCerts - expiredCerts; // Total menos revocados y expirados
+      
+      // Obtener todos los tipos de certificado que existen en los datos
+      const actualCertTypes = new Set(certificates.map(c => c.certType));
+      const allCertTypes = Array.from(actualCertTypes);
+      
       const certsByType = {};
-      certificateTypes.forEach(type => {
-        certsByType[type] = certificates.filter(c => c.certType === type).length;
+      allCertTypes.forEach(type => {
+        if (type) {
+          certsByType[type] = {
+            total: certificates.filter(c => c.certType === type).length,
+            activos: certificates.filter(c => c.certType === type && Number(c.expiresAt) >= now && c.revoked !== true).length,
+            revocados: certificates.filter(c => c.certType === type && c.revoked === true).length,
+            expirados: certificates.filter(c => c.certType === type && Number(c.expiresAt) < now && c.revoked !== true).length
+          };
+        }
       });
       
       const usersByRole = {};
       roles.forEach(role => {
         usersByRole[role] = users.filter(u => u.role === role).length;
       });
-      
-      const now = Math.floor(Date.now() / 1000);
-      const revokedCerts = certificates.filter(c => c.revoked === true).length;
-      const expiredCerts = certificates.filter(c => Number(c.expiresAt) < now && !c.revoked).length;
-      const activeCerts = certificates.filter(c => Number(c.expiresAt) >= now && !c.revoked).length;
       
       setReportData({
         generatedAt: new Date().toLocaleString('es-ES'),
@@ -829,26 +839,6 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
                   border: '1px solid #e5e7eb',
                   textAlign: 'center'
                 }}>
-                  <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#3b82f6', margin: '0' }}>{reportData.totalAssets}</p>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '5px 0 0 0' }}>Activos Totales</p>
-                </div>
-                <div style={{
-                  backgroundColor: 'white',
-                  padding: '15px',
-                  borderRadius: '8px',
-                  border: '1px solid #e5e7eb',
-                  textAlign: 'center'
-                }}>
-                  <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#10b981', margin: '0' }}>{reportData.totalCerts}</p>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '5px 0 0 0' }}>Certificados Totales</p>
-                </div>
-                <div style={{
-                  backgroundColor: 'white',
-                  padding: '15px',
-                  borderRadius: '8px',
-                  border: '1px solid #e5e7eb',
-                  textAlign: 'center'
-                }}>
                   <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#8b5cf6', margin: '0' }}>{reportData.totalUsers}</p>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '5px 0 0 0' }}>Usuarios del Sistema</p>
                 </div>
@@ -859,7 +849,17 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
                   border: '1px solid #e5e7eb',
                   textAlign: 'center'
                 }}>
-                  <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#f59e0b', margin: '0' }}>{reportData.activeCerts}</p>
+                  <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#06b6d4', margin: '0' }}>{reportData.totalCerts}</p>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '5px 0 0 0' }}>Certificados Totales</p>
+                </div>
+                <div style={{
+                  backgroundColor: 'white',
+                  padding: '15px',
+                  borderRadius: '8px',
+                  border: '1px solid #e5e7eb',
+                  textAlign: 'center'
+                }}>
+                  <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#10b981', margin: '0' }}>{reportData.activeCerts}</p>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '5px 0 0 0' }}>Certificados Activos</p>
                 </div>
                 <div style={{
@@ -882,6 +882,16 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
                   <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#ef4444', margin: '0' }}>{reportData.expiredCerts}</p>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '5px 0 0 0' }}>Certificados Expirados</p>
                 </div>
+                <div style={{
+                  backgroundColor: 'white',
+                  padding: '15px',
+                  borderRadius: '8px',
+                  border: '1px solid #e5e7eb',
+                  textAlign: 'center'
+                }}>
+                  <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#3b82f6', margin: '0' }}>{reportData.totalAssets}</p>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '5px 0 0 0' }}>Activos Totales</p>
+                </div>
               </div>
 
               <div style={{
@@ -896,12 +906,19 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
                   borderRadius: '8px',
                   border: '1px solid #e5e7eb'
                 }}>
-                  <h5 style={{ marginTop: 0 }}>Activos por Estado</h5>
-                  {Object.entries(reportData.assetsByStatus).map(([status, count]) => (
-                    <p key={status} style={{ fontSize: '12px', margin: '8px 0' }}>
-                      <strong>{status}:</strong> {count}
-                    </p>
-                  ))}
+                  <h5 style={{ marginTop: 0 }}>Certificados por Estado</h5>
+                  <p style={{ fontSize: '12px', margin: '8px 0' }}>
+                    <strong style={{ color: '#10b981' }}>✓ Activos:</strong> {reportData.activeCerts}
+                  </p>
+                  <p style={{ fontSize: '12px', margin: '8px 0' }}>
+                    <strong style={{ color: '#dc2626' }}>✕ Revocados:</strong> {reportData.revokedCerts}
+                  </p>
+                  <p style={{ fontSize: '12px', margin: '8px 0' }}>
+                    <strong style={{ color: '#f59e0b' }}>⏱ Expirados:</strong> {reportData.expiredCerts}
+                  </p>
+                  <p style={{ fontSize: '12px', margin: '12px 0 0 0', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
+                    <strong>Total:</strong> {reportData.totalCerts}
+                  </p>
                 </div>
 
                 <div style={{
@@ -910,12 +927,22 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
                   borderRadius: '8px',
                   border: '1px solid #e5e7eb'
                 }}>
-                  <h5 style={{ marginTop: 0 }}>Certificados por Tipo</h5>
-                  {Object.entries(reportData.certsByType).filter(([, count]) => count > 0).map(([type, count]) => (
-                    <p key={type} style={{ fontSize: '12px', margin: '8px 0' }}>
-                      <strong>{type}:</strong> {count}
-                    </p>
-                  ))}
+                  <h5 style={{ marginTop: 0 }}>Certificados por Tipo y Estado</h5>
+                  {Object.entries(reportData.certsByType).filter(([, data]) => data.total > 0).length > 0 ? (
+                    Object.entries(reportData.certsByType).filter(([, data]) => data.total > 0).map(([type, data]) => (
+                      <div key={type} style={{ marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                        <strong style={{ fontSize: '13px' }}>{type}</strong>
+                        <div style={{ fontSize: '12px', marginLeft: '10px', marginTop: '4px' }}>
+                          <p style={{ margin: '2px 0', color: '#10b981' }}>✓ Activos: {data.activos}</p>
+                          <p style={{ margin: '2px 0', color: '#dc2626' }}>✕ Revocados: {data.revocados}</p>
+                          <p style={{ margin: '2px 0', color: '#f59e0b' }}>⏱ Expirados: {data.expirados}</p>
+                          <p style={{ margin: '4px 0 0 0', color: '#6b7280', fontSize: '11px' }}>Total: {data.total}</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p style={{ fontSize: '12px', color: '#9ca3af' }}>Sin certificados registrados</p>
+                  )}
                 </div>
 
                 <div style={{
