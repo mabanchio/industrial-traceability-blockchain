@@ -646,7 +646,7 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
                   {filteredCerts.map((cert, idx) => {
                     const now = Math.floor(Date.now() / 1000);
                     const isExpired = Number(cert.expiresAt) < now;
-                    const status = isExpired ? 'Expirado' : (cert.status === 'Revocado' ? 'Revocado' : 'Activo');
+                    const status = cert.revoked === true ? 'Revocado' : (isExpired ? 'Expirado' : 'Activo');
                     
                     return (
                       <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
