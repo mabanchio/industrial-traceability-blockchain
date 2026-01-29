@@ -214,8 +214,9 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
       });
       
       const now = Math.floor(Date.now() / 1000);
-      const expiredCerts = certificates.filter(c => Number(c.expiresAt) < now).length;
-      const activeCerts = certificates.filter(c => Number(c.expiresAt) >= now && c.status === 'Activo').length;
+      const revokedCerts = certificates.filter(c => c.revoked === true).length;
+      const expiredCerts = certificates.filter(c => Number(c.expiresAt) < now && !c.revoked).length;
+      const activeCerts = certificates.filter(c => Number(c.expiresAt) >= now && !c.revoked).length;
       
       setReportData({
         generatedAt: new Date().toLocaleString('es-ES'),
@@ -225,6 +226,7 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
         assetsByStatus,
         certsByType,
         usersByRole,
+        revokedCerts,
         expiredCerts,
         activeCerts
       });
@@ -857,6 +859,26 @@ export default function AuditorPanel({ provider, signer, contractAddress, curren
                 }}>
                   <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#f59e0b', margin: '0' }}>{reportData.activeCerts}</p>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '5px 0 0 0' }}>Certificados Activos</p>
+                </div>
+                <div style={{
+                  backgroundColor: 'white',
+                  padding: '15px',
+                  borderRadius: '8px',
+                  border: '1px solid #e5e7eb',
+                  textAlign: 'center'
+                }}>
+                  <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#dc2626', margin: '0' }}>{reportData.revokedCerts}</p>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '5px 0 0 0' }}>Certificados Revocados</p>
+                </div>
+                <div style={{
+                  backgroundColor: 'white',
+                  padding: '15px',
+                  borderRadius: '8px',
+                  border: '1px solid #e5e7eb',
+                  textAlign: 'center'
+                }}>
+                  <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#ef4444', margin: '0' }}>{reportData.expiredCerts}</p>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '5px 0 0 0' }}>Certificados Expirados</p>
                 </div>
               </div>
 
